@@ -31,6 +31,7 @@ Copy [/.env.example](/Users/bronsondunbar/Sites/projects/redditgrowthos/.env.exa
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=""
 CLERK_SECRET_KEY=""
 DATABASE_URL=""
+DIRECT_URL=""
 OPENAI_API_KEY=""
 OPENAI_MODEL="gpt-4.1-mini"
 RESEND_API_KEY=""
@@ -40,7 +41,8 @@ CRON_SECRET=""
 
 Notes:
 
-- `DATABASE_URL` should point at your Postgres or Neon database.
+- `DATABASE_URL` should use Neon's pooled connection string for app traffic on Vercel.
+- `DIRECT_URL` should use the non-pooled Neon connection string for Prisma migrations.
 - `RESEND_FROM_EMAIL` must be a sender identity verified in Resend.
 - `CRON_SECRET` is used to protect the cron endpoint. Generate one with `openssl rand -base64 32`.
 
@@ -117,7 +119,8 @@ Authorization: Bearer <CRON_SECRET>
 
 - Deploy on Vercel.
 - Add all environment variables in the Vercel project settings.
-- Run `npm run db:migrate:deploy` against production before relying on scheduled digests.
+- Set the Vercel build command to `npm run build:vercel` so deploys apply Prisma migrations before building.
+- Set `DATABASE_URL` to the pooled Neon URL and `DIRECT_URL` to the direct Neon URL.
 - Make sure Clerk, Postgres, and Resend are all configured before enabling the cron.
 
 ## Current Data Model Highlights
