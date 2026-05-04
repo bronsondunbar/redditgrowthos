@@ -1,3 +1,4 @@
+import { isRedditConfigured, redditUserAgent } from "@/lib/config";
 import { rerankOpportunityMatches } from "@/lib/ai";
 import type {
   ActionCard,
@@ -38,8 +39,22 @@ type RedditRulesPayload = {
 
 const redditHeaders = {
   Accept: "application/json",
-  "User-Agent": "RedditGrowthOS/0.1 (founder workflow discovery)",
+  "User-Agent": redditUserAgent,
 };
+
+type RedditAccessToken = {
+  access_token: string;
+  expires_in: number;
+  token_type: string;
+  scope: string;
+};
+
+let redditTokenCache:
+  | {
+      accessToken: string;
+      expiresAt: number;
+    }
+  | undefined;
 
 export class RedditDiscoveryError extends Error {
   constructor(
@@ -49,6 +64,59 @@ export class RedditDiscoveryError extends Error {
     super(message);
     this.name = "RedditDiscoveryError";
   }
+}
+
+async function getRedditAccessToken() {
+  if (!isRedditConfigured) {
+    return null;
+  }
+
+  if (redditTokenCache && redditTokenCache.expiresAt > Date.now() + 30_000) {
+    return redditTokenCache.accessToken;
+  }
+
+  const clientId = process.env.REDDIT_CLIENT_ID;
+  const clientSecret = process.env.REDDIT_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    return null;
+  }
+
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString(
+    "base64",
+  );
+  const response = await fetch("https://www.reddit.com/api/v1/access_token", {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+      "User-Agent": redditUserAgent,
+    },
+    body: new URLSearchParams({ grant_type: "client_credentials" }),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const responseText = (await response.text()).replace(/\s+/g, " ").trim();
+
+    throw new RedditDiscoveryError(
+      `Reddit OAuth token request failed with ${response.status} ${response.statusText}`,
+      [responseText.slice(0, 180)],
+    );
+  }
+
+  const payload = (await response.json()) as RedditAccessToken;
+
+  if (!payload.access_token || !payload.expires_in) {
+    throw new RedditDiscoveryError("Reddit OAuth token response was invalid.");
+  }
+
+  redditTokenCache = {
+    accessToken: payload.access_token,
+    expiresAt: Date.now() + payload.expires_in * 1000,
+  };
+
+  return redditTokenCache.accessToken;
 }
 
 const relevanceStopWords = new Set([
@@ -197,7 +265,12 @@ function isRemovedListing(item: {
 }
 
 export async function searchRedditByKeyword(keyword: string) {
-  const url = new URL("https://www.reddit.com/search.json");
+  const accessToken = await getRedditAccessToken();
+  const url = new URL(
+    accessToken
+      ? "https://oauth.reddit.com/search"
+      : "https://www.reddit.com/search.json",
+  );
   url.searchParams.set("q", keyword);
   url.searchParams.set("sort", "new");
   url.searchParams.set("limit", "10");
@@ -206,7 +279,12 @@ export async function searchRedditByKeyword(keyword: string) {
   url.searchParams.set("raw_json", "1");
 
   const response = await fetch(url, {
-    headers: redditHeaders,
+    headers: accessToken
+      ? {
+          ...redditHeaders,
+          Authorization: `Bearer ${accessToken}`,
+        }
+      : redditHeaders,
     cache: "no-store",
   });
 

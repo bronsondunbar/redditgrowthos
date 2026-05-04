@@ -32,6 +32,9 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=""
 CLERK_SECRET_KEY=""
 DATABASE_URL=""
 DIRECT_URL=""
+REDDIT_CLIENT_ID=""
+REDDIT_CLIENT_SECRET=""
+REDDIT_USER_AGENT=""
 OPENAI_API_KEY=""
 OPENAI_MODEL="gpt-4.1-mini"
 RESEND_API_KEY=""
@@ -43,6 +46,7 @@ Notes:
 
 - `DATABASE_URL` should use Neon's pooled connection string for app traffic on Vercel.
 - `DIRECT_URL` should use the non-pooled Neon connection string for Prisma migrations.
+- `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, and `REDDIT_USER_AGENT` should be set for authenticated Reddit discovery in production. Anonymous Reddit search is unreliable from Vercel and may return `403`.
 - `RESEND_FROM_EMAIL` must be a sender identity verified in Resend.
 - `CRON_SECRET` is used to protect the cron endpoint. Generate one with `openssl rand -base64 32`.
 
@@ -121,6 +125,7 @@ Authorization: Bearer <CRON_SECRET>
 - Add all environment variables in the Vercel project settings.
 - Set the Vercel build command to `npm run build:vercel` so deploys apply Prisma migrations before building.
 - Set `DATABASE_URL` to the pooled Neon URL and `DIRECT_URL` to the direct Neon URL.
+- Create a Reddit app and set `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, and a specific `REDDIT_USER_AGENT` in Vercel before relying on discovery in production.
 - Make sure Clerk, Postgres, and Resend are all configured before enabling the cron.
 
 ## Current Data Model Highlights

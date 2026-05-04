@@ -12,11 +12,21 @@ export const isDatabaseConfigured = Boolean(process.env.DATABASE_URL);
 
 export const isOpenAiConfigured = Boolean(process.env.OPENAI_API_KEY);
 
+export const isRedditConfigured = Boolean(
+  process.env.REDDIT_CLIENT_ID &&
+  process.env.REDDIT_CLIENT_SECRET &&
+  process.env.REDDIT_USER_AGENT,
+);
+
 export const isResendConfigured = Boolean(
   process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL,
 );
 
 export const openAiModel = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+
+export const redditUserAgent =
+  process.env.REDDIT_USER_AGENT ||
+  "RedditGrowthOS/0.1 (founder workflow discovery)";
 
 export const resendFromEmail = process.env.RESEND_FROM_EMAIL || "";
 
