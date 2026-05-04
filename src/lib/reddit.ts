@@ -37,8 +37,19 @@ type RedditRulesPayload = {
 };
 
 const redditHeaders = {
+  Accept: "application/json",
   "User-Agent": "RedditGrowthOS/0.1 (founder workflow discovery)",
 };
+
+export class RedditDiscoveryError extends Error {
+  constructor(
+    message: string,
+    readonly causeDetails: string[] = [],
+  ) {
+    super(message);
+    this.name = "RedditDiscoveryError";
+  }
+}
 
 const relevanceStopWords = new Set([
   "about",
@@ -191,14 +202,21 @@ export async function searchRedditByKeyword(keyword: string) {
   url.searchParams.set("sort", "new");
   url.searchParams.set("limit", "10");
   url.searchParams.set("t", "week");
+  url.searchParams.set("type", "link");
+  url.searchParams.set("raw_json", "1");
 
   const response = await fetch(url, {
     headers: redditHeaders,
-    next: { revalidate: 1800 },
+    cache: "no-store",
   });
 
   if (!response.ok) {
-    throw new Error(`Reddit search failed for keyword: ${keyword}`);
+    const responseText = (await response.text()).replace(/\s+/g, " ").trim();
+    const responseSnippet = responseText.slice(0, 180);
+
+    throw new Error(
+      `Reddit search failed for keyword \"${keyword}\" with ${response.status} ${response.statusText}${responseSnippet ? `: ${responseSnippet}` : ""}`,
+    );
   }
 
   const payload = (await response.json()) as RedditListing;
@@ -406,6 +424,30 @@ export async function discoverOpportunities(input: {
     queries.map((keyword) => searchRedditByKeyword(keyword)),
   );
   const deduped = new Map<string, OpportunityCard>();
+  const failures = settled
+    .filter(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    )
+    .map((result) =>
+      result.reason instanceof Error
+        ? result.reason.message
+        : String(result.reason),
+    );
+
+  if (failures.length === settled.length && settled.length > 0) {
+    throw new RedditDiscoveryError(
+      "Reddit discovery failed for every search query.",
+      failures,
+    );
+  }
+
+  if (failures.length > 0) {
+    console.warn("Partial Reddit discovery failure", {
+      queryCount: queries.length,
+      failedQueryCount: failures.length,
+      sampleFailure: failures[0],
+    });
+  }
 
   for (const result of settled) {
     if (result.status !== "fulfilled") {

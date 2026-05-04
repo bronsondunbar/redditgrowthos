@@ -3,7 +3,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { isClerkConfigured, isDatabaseConfigured } from "@/lib/config";
+import { RedditDiscoveryError } from "@/lib/reddit";
 import { persistDiscovery, runDiscovery } from "@/lib/store";
+
+export const runtime = "nodejs";
 
 const discoverySchema = z.object({
   projectId: z.string().trim().cuid().nullable().optional(),
@@ -60,6 +63,23 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+
+    if (error instanceof RedditDiscoveryError) {
+      console.error("Opportunity discovery upstream failure", {
+        message: error.message,
+        causes: error.causeDetails,
+      });
+
+      return NextResponse.json(
+        {
+          error:
+            "Reddit search failed from the deployment environment. Check the server logs for the upstream response.",
+        },
+        { status: 502 },
+      );
+    }
+
+    console.error("Opportunity discovery failed", error);
 
     return NextResponse.json(
       {
