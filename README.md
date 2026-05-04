@@ -50,6 +50,30 @@ Notes:
 - `RESEND_FROM_EMAIL` must be a sender identity verified in Resend.
 - `CRON_SECRET` is used to protect the cron endpoint. Generate one with `openssl rand -base64 32`.
 
+## Reddit API Setup
+
+Reddit discovery in production uses Reddit OAuth with the `client_credentials` flow. That means you need a confidential Reddit app with a client ID, client secret, and a specific user agent.
+
+1. Sign in to the Reddit account that should own the app.
+2. Open `https://www.reddit.com/prefs/apps`.
+3. Click `create an app` or `create another app`.
+4. Give the app a name like `RedditGrowthOS`.
+5. Choose a confidential app type. A `web app` works for this setup.
+6. If Reddit requires a redirect URI, use a placeholder you control such as `http://localhost:3000/api/reddit/callback`. This project does not currently use the redirect URI, but Reddit may still require one during app registration.
+7. Save the app.
+
+Map the Reddit app values like this:
+
+- `REDDIT_CLIENT_ID`: the short ID shown under the app name
+- `REDDIT_CLIENT_SECRET`: the value labeled `secret`
+- `REDDIT_USER_AGENT`: a unique descriptive string for your app, for example `web:redditgrowthos:v0.1 (by /u/your_reddit_username)`
+
+Recommended setup notes:
+
+- Keep the client secret only in server-side env vars such as local `.env` and Vercel project settings.
+- Use a real Reddit username in the user agent when possible.
+- Add the same Reddit env vars to both local development and Vercel if you want discovery behavior to match across environments.
+
 ## Local Development
 
 Install dependencies:
