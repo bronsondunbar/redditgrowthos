@@ -55,3 +55,59 @@ a {
   background: rgba(217, 93, 57, 0.18);
   color: var(--foreground);
 }
+
+@keyframes panel-overlay-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes panel-right-in {
+  from {
+    opacity: 0;
+    transform: translate3d(24px, 0, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes panel-left-in {
+  from {
+    opacity: 0;
+    transform: translate3d(-24px, 0, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.panel-overlay-enter {
+  animation: panel-overlay-in 180ms ease-out;
+}
+
+.panel-right-enter {
+  animation: panel-right-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+}
+
+.panel-left-enter {
+  animation: panel-left-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-overlay-enter,
+  .panel-right-enter,
+  .panel-left-enter {
+    animation: none;
+  }
+}

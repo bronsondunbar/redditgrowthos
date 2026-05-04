@@ -1149,8 +1149,8 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
       </section>
 
       {activePostDraft ? (
-        <div className="fixed inset-0 z-40 flex justify-start bg-black/28 backdrop-blur-[2px]">
-          <div className="h-full w-full max-w-xl overflow-y-auto border-r border-black/10 bg-[#fffaf0] p-6 shadow-[20px_0_60px_rgba(20,17,15,0.18)] sm:p-8">
+        <div className="panel-overlay-enter fixed inset-0 z-40 flex justify-start bg-black/28 backdrop-blur-[2px]">
+          <div className="panel-left-enter h-full w-full max-w-xl overflow-y-auto border-r border-black/10 bg-[#fffaf0] p-6 shadow-[20px_0_60px_rgba(20,17,15,0.18)] sm:p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#8b8278]">
@@ -1663,8 +1663,14 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
       </section>
 
       {composerMode ? (
-        <div className="fixed inset-0 z-40 flex justify-end bg-black/28 backdrop-blur-[2px]">
-          <div className="h-full w-full max-w-xl overflow-y-auto border-l border-black/10 bg-[#fffaf0] p-6 shadow-[-20px_0_60px_rgba(20,17,15,0.18)] sm:p-8">
+        <div
+          className="panel-overlay-enter fixed inset-0 z-40 flex justify-end bg-black/28 backdrop-blur-[2px]"
+          onClick={closeComposer}
+        >
+          <div
+            className="panel-right-enter h-full w-full max-w-xl overflow-y-auto border-l border-black/10 bg-[#fffaf0] p-6 shadow-[-20px_0_60px_rgba(20,17,15,0.18)] sm:p-8"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#8b8278]">
