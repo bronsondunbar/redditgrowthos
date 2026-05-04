@@ -93,27 +93,27 @@ export default function Home() {
       <section className="grid gap-4 md:grid-cols-3">
         {[
           {
-            title: "Daily action plan",
-            copy: "One post and two comments generated from actual opportunities instead of a blank content calendar.",
+            title: "Show up with a plan",
+            copy: "Start each day with the next three Reddit moves already chosen so momentum does not depend on deciding what to do from scratch.",
           },
           {
-            title: "Subreddit discovery",
-            copy: "Rank subreddits by engagement, intent, and a promo-friendliness heuristic so you stop guessing where to show up.",
+            title: "Find the right demand faster",
+            copy: "See where buyer pain, active conversations, and safer promotion conditions already exist so you spend less time hunting and more time engaging.",
           },
           {
-            title: "Inbox workflow",
-            copy: "Move threads from new to saved to replied so lead discovery does not collapse into tab chaos.",
+            title: "Turn threads into pipeline",
+            copy: "Keep promising conversations organized from first signal to reply so high-intent opportunities do not disappear into open tabs and memory.",
           },
-        ].map((feature) => (
+        ].map((outcome) => (
           <article
-            key={feature.title}
+            key={outcome.title}
             className="rounded-[28px] border border-black/10 bg-white/88 p-6 shadow-[0_16px_40px_rgba(20,17,15,0.06)]"
           >
             <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[#14110f]">
-              {feature.title}
+              {outcome.title}
             </h2>
             <p className="mt-3 text-sm leading-7 text-[#4f4740]">
-              {feature.copy}
+              {outcome.copy}
             </p>
           </article>
         ))}

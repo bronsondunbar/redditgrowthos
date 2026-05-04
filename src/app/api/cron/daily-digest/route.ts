@@ -10,8 +10,7 @@ import {
 } from "@/lib/config";
 import { buildDailyDigestEmail } from "@/lib/daily-digest";
 import { prisma } from "@/lib/prisma";
-import { buildDailyActions, buildSubredditSummaries } from "@/lib/reddit";
-import type { OpportunityCard, TrackedPostCard } from "@/lib/types";
+import { refreshProjectDiscovery } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,64 +21,6 @@ const resend = process.env.RESEND_API_KEY
 
 function unauthorizedResponse() {
   return Response.json({ error: "Unauthorized." }, { status: 401 });
-}
-
-function toOpportunityCard(opportunity: {
-  id: string;
-  keyword: string;
-  title: string;
-  excerpt: string;
-  subreddit: string;
-  author: string | null;
-  permalink: string;
-  score: number;
-  commentsCount: number;
-  intentScore: number;
-  riskScore: number;
-  status: "NEW" | "SAVED" | "REPLIED" | "DISMISSED";
-  discoveredAt: Date;
-}): OpportunityCard {
-  return {
-    id: opportunity.id,
-    keyword: opportunity.keyword,
-    title: opportunity.title,
-    excerpt: opportunity.excerpt,
-    subreddit: opportunity.subreddit,
-    author: opportunity.author || "unknown",
-    permalink: opportunity.permalink,
-    score: opportunity.score,
-    commentsCount: opportunity.commentsCount,
-    intentScore: opportunity.intentScore,
-    riskScore: opportunity.riskScore,
-    status: opportunity.status,
-    discoveredAt: opportunity.discoveredAt.toISOString(),
-  };
-}
-
-function toTrackedPostCard(post: {
-  id: string;
-  redditId: string;
-  title: string;
-  subreddit: string;
-  author: string | null;
-  permalink: string;
-  score: number;
-  commentsCount: number;
-  postedAt: Date;
-  lastSyncedAt: Date;
-}): TrackedPostCard {
-  return {
-    id: post.id,
-    redditId: post.redditId,
-    title: post.title,
-    subreddit: post.subreddit,
-    author: post.author || "unknown",
-    permalink: post.permalink,
-    score: post.score,
-    commentsCount: post.commentsCount,
-    postedAt: post.postedAt.toISOString(),
-    lastSyncedAt: post.lastSyncedAt.toISOString(),
-  };
 }
 
 export async function GET(request: Request) {
@@ -115,57 +56,12 @@ export async function GET(request: Request) {
       },
     },
     select: {
+      id: true,
       clerkId: true,
       projects: {
         orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
         select: {
           id: true,
-          name: true,
-          websiteUrl: true,
-          opportunities: {
-            where: {
-              status: {
-                not: "DISMISSED",
-              },
-            },
-            orderBy: [{ intentScore: "desc" }, { discoveredAt: "desc" }],
-            take: 24,
-            select: {
-              id: true,
-              keyword: true,
-              title: true,
-              excerpt: true,
-              subreddit: true,
-              author: true,
-              permalink: true,
-              score: true,
-              commentsCount: true,
-              intentScore: true,
-              riskScore: true,
-              status: true,
-              discoveredAt: true,
-            },
-          },
-          trackedPosts: {
-            orderBy: [
-              { score: "desc" },
-              { commentsCount: "desc" },
-              { postedAt: "desc" },
-            ],
-            take: 3,
-            select: {
-              id: true,
-              redditId: true,
-              title: true,
-              subreddit: true,
-              author: true,
-              permalink: true,
-              score: true,
-              commentsCount: true,
-              postedAt: true,
-              lastSyncedAt: true,
-            },
-          },
         },
       },
     },
@@ -188,25 +84,32 @@ export async function GET(request: Request) {
       continue;
     }
 
-    const projects = user.projects
-      .map((project) => {
-        const opportunities = project.opportunities.map(toOpportunityCard);
-        const actions = buildDailyActions(
-          opportunities,
-          buildSubredditSummaries(opportunities),
-        ).slice(0, 3);
-        const trackedPosts = project.trackedPosts.map(toTrackedPostCard);
+    const projects = [];
 
-        return {
-          name: project.name,
-          websiteUrl: project.websiteUrl || "",
-          actions,
-          trackedPosts,
-        };
-      })
-      .filter(
-        (project) => project.actions.length || project.trackedPosts.length,
-      );
+    for (const project of user.projects) {
+      const refreshedProject = await refreshProjectDiscovery(
+        project.id,
+        user.id,
+      ).catch(() => null);
+
+      if (!refreshedProject?.currentProjectId) {
+        continue;
+      }
+
+      if (
+        !refreshedProject.actions.length &&
+        !refreshedProject.trackedPosts.length
+      ) {
+        continue;
+      }
+
+      projects.push({
+        name: refreshedProject.productName,
+        websiteUrl: refreshedProject.websiteUrl || "",
+        actions: refreshedProject.actions.slice(0, 3),
+        trackedPosts: refreshedProject.trackedPosts.slice(0, 3),
+      });
+    }
 
     if (!projects.length) {
       skipped += 1;

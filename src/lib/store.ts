@@ -17,6 +17,7 @@ import type {
   DashboardState,
   DiscoveryPayload,
   OpportunityCard,
+  PostDraftCard,
   ProjectSummary,
   TrackedPostCard,
   WorkflowStatus,
@@ -30,6 +31,7 @@ function createDashboardState(input: {
   productDescription: string;
   trackedKeywords: string[];
   trackedPosts: TrackedPostCard[];
+  postDrafts: PostDraftCard[];
   opportunities: OpportunityCard[];
   demoMode: boolean;
   requiresAuth: boolean;
@@ -51,6 +53,7 @@ function createDashboardState(input: {
     productDescription: input.productDescription,
     trackedKeywords: input.trackedKeywords,
     trackedPosts: input.trackedPosts,
+    postDrafts: input.postDrafts,
     analytics: buildAnalytics(input.opportunities, subreddits),
     actions: buildDailyActions(input.opportunities, subreddits),
     subreddits,
@@ -70,6 +73,7 @@ function buildEmptyState(
       "A Reddit growth workspace for founders that combines opportunity discovery, reply drafting, and a daily action plan.",
     trackedKeywords: [],
     trackedPosts: [],
+    postDrafts: [],
     opportunities: [],
     demoMode: input?.demoMode ?? false,
     requiresAuth: input?.requiresAuth ?? false,
@@ -122,6 +126,8 @@ function toOpportunityCard(opportunity: {
   commentsCount: number;
   intentScore: number;
   riskScore: number;
+  replyDraft: string | null;
+  replySoftPromotionScore: number;
   status: OpportunityStatus;
   discoveredAt: Date;
 }): OpportunityCard {
@@ -137,6 +143,8 @@ function toOpportunityCard(opportunity: {
     commentsCount: opportunity.commentsCount,
     intentScore: opportunity.intentScore,
     riskScore: opportunity.riskScore,
+    replyDraft: opportunity.replyDraft || undefined,
+    replySoftPromotionScore: opportunity.replySoftPromotionScore,
     status: opportunity.status,
     discoveredAt: opportunity.discoveredAt.toISOString(),
   };
@@ -168,20 +176,44 @@ function toTrackedPostCard(post: {
   };
 }
 
-export async function getDashboardState(selectedProjectId?: string | null) {
-  if (!isClerkConfigured || !isDatabaseConfigured || !prisma) {
+function toPostDraftCard(postDraft: {
+  id: string;
+  actionKey: string;
+  subreddit: string;
+  title: string;
+  body: string;
+  rules: string[];
+  reviewVerdict: string;
+  reviewSummary: string;
+  reviewIssues: string[];
+  updatedAt: Date;
+}): PostDraftCard {
+  return {
+    id: postDraft.id,
+    actionKey: postDraft.actionKey,
+    subreddit: postDraft.subreddit,
+    title: postDraft.title,
+    body: postDraft.body,
+    rules: postDraft.rules,
+    review: {
+      verdict: postDraft.reviewVerdict as PostDraftCard["review"]["verdict"],
+      summary: postDraft.reviewSummary,
+      issues: postDraft.reviewIssues,
+    },
+    updatedAt: postDraft.updatedAt.toISOString(),
+  };
+}
+
+async function getDashboardStateForUser(
+  userId: string,
+  selectedProjectId?: string | null,
+) {
+  if (!prisma) {
     return buildEmptyState();
   }
 
-  const session = await auth();
-
-  if (!session.userId) {
-    return buildEmptyState({ requiresAuth: true });
-  }
-
-  const user = await ensureUser(session.userId);
   const projects = await prisma.project.findMany({
-    where: { userId: user.id },
+    where: { userId },
     include: {
       _count: {
         select: {
@@ -200,23 +232,30 @@ export async function getDashboardState(selectedProjectId?: string | null) {
   const currentProject =
     projects.find((project) => project.id === selectedProjectId) || projects[0];
 
-  const [keywords, opportunities, trackedPosts] = await Promise.all([
-    prisma.trackedKeyword.findMany({
-      where: { userId: user.id, projectId: currentProject.id },
-      orderBy: { createdAt: "asc" },
-      take: 12,
-    }),
-    prisma.opportunity.findMany({
-      where: { userId: user.id, projectId: currentProject.id },
-      orderBy: [{ intentScore: "desc" }, { discoveredAt: "desc" }],
-      take: 24,
-    }),
-    prisma.trackedPost.findMany({
-      where: { userId: user.id, projectId: currentProject.id },
-      orderBy: [{ postedAt: "desc" }, { lastSyncedAt: "desc" }],
-      take: 12,
-    }),
-  ]);
+  const [keywords, opportunities, trackedPosts, postDrafts] = await Promise.all(
+    [
+      prisma.trackedKeyword.findMany({
+        where: { userId, projectId: currentProject.id },
+        orderBy: { createdAt: "asc" },
+        take: 12,
+      }),
+      prisma.opportunity.findMany({
+        where: { userId, projectId: currentProject.id },
+        orderBy: [{ intentScore: "desc" }, { discoveredAt: "desc" }],
+        take: 24,
+      }),
+      prisma.trackedPost.findMany({
+        where: { userId, projectId: currentProject.id },
+        orderBy: [{ postedAt: "desc" }, { lastSyncedAt: "desc" }],
+        take: 12,
+      }),
+      prisma.postDraft.findMany({
+        where: { userId, projectId: currentProject.id },
+        orderBy: [{ updatedAt: "desc" }],
+        take: 12,
+      }),
+    ],
+  );
 
   return createDashboardState({
     projects: projects.map(toProjectSummary),
@@ -226,10 +265,26 @@ export async function getDashboardState(selectedProjectId?: string | null) {
     productDescription: currentProject.description || "",
     trackedKeywords: keywords.map((keyword) => keyword.term),
     trackedPosts: trackedPosts.map(toTrackedPostCard),
+    postDrafts: postDrafts.map(toPostDraftCard),
     opportunities: opportunities.map(toOpportunityCard),
     demoMode: false,
     requiresAuth: false,
   });
+}
+
+export async function getDashboardState(selectedProjectId?: string | null) {
+  if (!isClerkConfigured || !isDatabaseConfigured || !prisma) {
+    return buildEmptyState();
+  }
+
+  const session = await auth();
+
+  if (!session.userId) {
+    return buildEmptyState({ requiresAuth: true });
+  }
+
+  const user = await ensureUser(session.userId);
+  return getDashboardStateForUser(user.id, selectedProjectId);
 }
 
 export function buildTransientDashboardState(
@@ -256,6 +311,7 @@ export function buildTransientDashboardState(
     productDescription: payload.productDescription,
     trackedKeywords: payload.keywords,
     trackedPosts: [],
+    postDrafts: [],
     opportunities,
     demoMode: !isDatabaseConfigured,
     requiresAuth: false,
@@ -269,6 +325,99 @@ export async function runDiscovery(payload: DiscoveryPayload) {
     productDescription: payload.productDescription,
   });
   return buildTransientDashboardState(payload, opportunities);
+}
+
+async function persistProjectDiscovery(input: {
+  userId: string;
+  projectId: string;
+  payload: DiscoveryPayload;
+  dashboard: DashboardState;
+}) {
+  const db = prisma;
+
+  if (!db) {
+    return input.dashboard;
+  }
+
+  await db.trackedKeyword.deleteMany({
+    where: {
+      userId: input.userId,
+      projectId: input.projectId,
+      term: {
+        notIn: input.payload.keywords,
+      },
+    },
+  });
+
+  await Promise.all(
+    input.payload.keywords.map((term) =>
+      db.trackedKeyword.upsert({
+        where: { projectId_term: { projectId: input.projectId, term } },
+        update: {},
+        create: { userId: input.userId, projectId: input.projectId, term },
+      }),
+    ),
+  );
+
+  await db.opportunity.deleteMany({
+    where: {
+      userId: input.userId,
+      projectId: input.projectId,
+      status: {
+        in: [OpportunityStatus.NEW, OpportunityStatus.SAVED],
+      },
+      redditId: {
+        notIn: input.dashboard.opportunities.map(
+          (opportunity) => opportunity.id,
+        ),
+      },
+    },
+  });
+
+  await Promise.all(
+    input.dashboard.opportunities.map((opportunity) =>
+      db.opportunity.upsert({
+        where: {
+          projectId_redditId: {
+            projectId: input.projectId,
+            redditId: opportunity.id,
+          },
+        },
+        update: {
+          projectId: input.projectId,
+          keyword: opportunity.keyword,
+          title: opportunity.title,
+          excerpt: opportunity.excerpt,
+          subreddit: opportunity.subreddit,
+          author: opportunity.author,
+          permalink: opportunity.permalink,
+          score: opportunity.score,
+          commentsCount: opportunity.commentsCount,
+          intentScore: opportunity.intentScore,
+          riskScore: opportunity.riskScore,
+          discoveredAt: new Date(opportunity.discoveredAt),
+        },
+        create: {
+          userId: input.userId,
+          projectId: input.projectId,
+          redditId: opportunity.id,
+          keyword: opportunity.keyword,
+          title: opportunity.title,
+          excerpt: opportunity.excerpt,
+          subreddit: opportunity.subreddit,
+          author: opportunity.author,
+          permalink: opportunity.permalink,
+          score: opportunity.score,
+          commentsCount: opportunity.commentsCount,
+          intentScore: opportunity.intentScore,
+          riskScore: opportunity.riskScore,
+          discoveredAt: new Date(opportunity.discoveredAt),
+        },
+      }),
+    ),
+  );
+
+  return getDashboardStateForUser(input.userId, input.projectId);
 }
 
 export async function persistDiscovery(
@@ -310,83 +459,66 @@ export async function persistDiscovery(
         },
       });
 
-  await db.trackedKeyword.deleteMany({
+  return persistProjectDiscovery({
+    userId: user.id,
+    projectId: project.id,
+    payload,
+    dashboard,
+  });
+}
+
+export async function refreshProjectDiscovery(
+  projectId: string,
+  userId: string,
+) {
+  if (!prisma) {
+    return null;
+  }
+
+  const project = await prisma.project.findFirst({
     where: {
-      userId: user.id,
-      projectId: project.id,
-      term: {
-        notIn: payload.keywords,
+      id: projectId,
+      userId,
+    },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      websiteUrl: true,
+      trackedKeywords: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          term: true,
+        },
+        take: 12,
       },
     },
   });
 
-  await Promise.all(
-    payload.keywords.map((term) =>
-      db.trackedKeyword.upsert({
-        where: { projectId_term: { projectId: project.id, term } },
-        update: {},
-        create: { userId: user.id, projectId: project.id, term },
-      }),
-    ),
-  );
+  if (!project) {
+    return null;
+  }
 
-  await db.opportunity.deleteMany({
-    where: {
-      userId: user.id,
-      projectId: project.id,
-      status: {
-        in: [OpportunityStatus.NEW, OpportunityStatus.SAVED],
-      },
-      redditId: {
-        notIn: dashboard.opportunities.map((opportunity) => opportunity.id),
-      },
-    },
+  const payload: DiscoveryPayload = {
+    projectId: project.id,
+    websiteUrl: project.websiteUrl || "",
+    productName: project.name,
+    productDescription: project.description || "",
+    keywords: project.trackedKeywords.map((keyword) => keyword.term),
+  };
+
+  if (!payload.keywords.length) {
+    return getDashboardStateForUser(userId, project.id);
+  }
+
+  const dashboard = await runDiscovery(payload);
+
+  return persistProjectDiscovery({
+    userId,
+    projectId: project.id,
+    payload,
+    dashboard,
   });
-
-  await Promise.all(
-    dashboard.opportunities.map((opportunity) =>
-      db.opportunity.upsert({
-        where: {
-          projectId_redditId: {
-            projectId: project.id,
-            redditId: opportunity.id,
-          },
-        },
-        update: {
-          projectId: project.id,
-          keyword: opportunity.keyword,
-          title: opportunity.title,
-          excerpt: opportunity.excerpt,
-          subreddit: opportunity.subreddit,
-          author: opportunity.author,
-          permalink: opportunity.permalink,
-          score: opportunity.score,
-          commentsCount: opportunity.commentsCount,
-          intentScore: opportunity.intentScore,
-          riskScore: opportunity.riskScore,
-          discoveredAt: new Date(opportunity.discoveredAt),
-        },
-        create: {
-          userId: user.id,
-          projectId: project.id,
-          redditId: opportunity.id,
-          keyword: opportunity.keyword,
-          title: opportunity.title,
-          excerpt: opportunity.excerpt,
-          subreddit: opportunity.subreddit,
-          author: opportunity.author,
-          permalink: opportunity.permalink,
-          score: opportunity.score,
-          commentsCount: opportunity.commentsCount,
-          intentScore: opportunity.intentScore,
-          riskScore: opportunity.riskScore,
-          discoveredAt: new Date(opportunity.discoveredAt),
-        },
-      }),
-    ),
-  );
-
-  return getDashboardState(project.id);
 }
 
 export async function maybeGetClerkUserId() {
@@ -482,4 +614,102 @@ export async function saveTrackedPost(
   });
 
   return toTrackedPostCard(post);
+}
+
+export async function savePostDraft(
+  input: {
+    projectId?: string | null;
+    actionKey: string;
+    subreddit: string;
+    title: string;
+    body: string;
+    rules: string[];
+    review: PostDraftCard["review"];
+  },
+  clerkId: string,
+) {
+  if (!prisma || !input.projectId) {
+    return null;
+  }
+
+  const user = await ensureUser(clerkId);
+  const project = await prisma.project.findFirst({
+    where: {
+      id: input.projectId,
+      userId: user.id,
+    },
+  });
+
+  if (!project) {
+    return null;
+  }
+
+  const postDraft = await prisma.postDraft.upsert({
+    where: {
+      projectId_actionKey: {
+        projectId: project.id,
+        actionKey: input.actionKey,
+      },
+    },
+    update: {
+      subreddit: input.subreddit,
+      title: input.title,
+      body: input.body,
+      rules: input.rules,
+      reviewVerdict: input.review.verdict,
+      reviewSummary: input.review.summary,
+      reviewIssues: input.review.issues,
+    },
+    create: {
+      userId: user.id,
+      projectId: project.id,
+      actionKey: input.actionKey,
+      subreddit: input.subreddit,
+      title: input.title,
+      body: input.body,
+      rules: input.rules,
+      reviewVerdict: input.review.verdict,
+      reviewSummary: input.review.summary,
+      reviewIssues: input.review.issues,
+    },
+  });
+
+  return toPostDraftCard(postDraft);
+}
+
+export async function saveReplyDraft(
+  input: {
+    opportunityId?: string | null;
+    reply: string;
+    softPromotionScore: number;
+  },
+  clerkId: string,
+) {
+  if (!prisma || !input.opportunityId) {
+    return null;
+  }
+
+  const user = await ensureUser(clerkId);
+  const opportunity = await prisma.opportunity.findFirst({
+    where: {
+      id: input.opportunityId,
+      userId: user.id,
+    },
+  });
+
+  if (!opportunity) {
+    return null;
+  }
+
+  const updatedOpportunity = await prisma.opportunity.update({
+    where: {
+      id: opportunity.id,
+    },
+    data: {
+      replyDraft: input.reply,
+      replySoftPromotionScore: input.softPromotionScore,
+    },
+  });
+
+  return toOpportunityCard(updatedOpportunity);
 }

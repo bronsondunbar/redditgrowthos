@@ -7,6 +7,7 @@ import { startTransition, useMemo, useState } from "react";
 import type {
   DashboardState,
   OpportunityCard,
+  PostDraftCard,
   ProjectSummary,
   TrackedPostCard,
   WorkflowStatus,
@@ -48,6 +49,34 @@ type ProjectFormState = {
 };
 
 type OpportunityFilter = "high" | "low";
+type ReplyStateFilter = "not-replied" | "replied";
+type PostDraftState = Record<
+  string,
+  {
+    title: string;
+    body: string;
+    rules: string[];
+    review: {
+      verdict: "looks-safe" | "review-needed" | "likely-to-be-removed";
+      summary: string;
+      issues: string[];
+    };
+  }
+>;
+
+type PostDraftPanelState = {
+  actionKey: string;
+  subreddit: string;
+  title: string;
+  body: string;
+  rules: string[];
+  review: {
+    verdict: "looks-safe" | "review-needed" | "likely-to-be-removed";
+    summary: string;
+    issues: string[];
+  };
+  updatedAt?: string;
+};
 
 function getDefaultOpportunityFilter(opportunities: OpportunityCard[]) {
   return opportunities.some(
@@ -66,6 +95,57 @@ function buildFormState(state: DashboardState): ProjectFormState {
     productDescription: state.productDescription,
     keywords: state.trackedKeywords.join(", "),
   };
+}
+
+function buildPostDraftState(postDrafts: PostDraftCard[]): PostDraftState {
+  return Object.fromEntries(
+    postDrafts.map((postDraft) => [
+      postDraft.actionKey,
+      {
+        title: postDraft.title,
+        body: postDraft.body,
+        rules: postDraft.rules,
+        review: postDraft.review,
+      },
+    ]),
+  );
+}
+
+function buildReplyDraftState(opportunities: OpportunityCard[]) {
+  return Object.fromEntries(
+    opportunities
+      .filter((opportunity) => Boolean(opportunity.replyDraft))
+      .map((opportunity) => [opportunity.id, opportunity.replyDraft!]),
+  );
+}
+
+function buildReplyScoreState(opportunities: OpportunityCard[]) {
+  return Object.fromEntries(
+    opportunities
+      .filter((opportunity) => Boolean(opportunity.replyDraft))
+      .map((opportunity) => [
+        opportunity.id,
+        opportunity.replySoftPromotionScore || 0,
+      ]),
+  );
+}
+
+function upsertPostDraftList(
+  postDrafts: PostDraftCard[],
+  nextPostDraft: PostDraftCard,
+) {
+  return [
+    nextPostDraft,
+    ...postDrafts.filter(
+      (postDraft) => postDraft.actionKey !== nextPostDraft.actionKey,
+    ),
+  ]
+    .sort(
+      (left, right) =>
+        new Date(right.updatedAt).getTime() -
+        new Date(left.updatedAt).getTime(),
+    )
+    .slice(0, 12);
 }
 
 function buildEmptyProjectForm(): ProjectFormState {
@@ -134,23 +214,18 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
   );
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
-  const [replyScores, setReplyScores] = useState<Record<string, number>>({});
-  const [postDrafts, setPostDrafts] = useState<
-    Record<
-      string,
-      {
-        title: string;
-        body: string;
-        rules: string[];
-        review: {
-          verdict: "looks-safe" | "review-needed" | "likely-to-be-removed";
-          summary: string;
-          issues: string[];
-        };
-      }
-    >
-  >({});
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>(() =>
+    buildReplyDraftState(initialState.opportunities),
+  );
+  const [replyScores, setReplyScores] = useState<Record<string, number>>(() =>
+    buildReplyScoreState(initialState.opportunities),
+  );
+  const [postDrafts, setPostDrafts] = useState<PostDraftState>(() =>
+    buildPostDraftState(initialState.postDrafts),
+  );
+  const [activePostDraft, setActivePostDraft] =
+    useState<PostDraftPanelState | null>(null);
+  const [copiedDraftKey, setCopiedDraftKey] = useState<string | null>(null);
   const [busyOpportunityId, setBusyOpportunityId] = useState<string | null>(
     null,
   );
@@ -165,6 +240,8 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
   const [opportunityFilter, setOpportunityFilter] = useState<OpportunityFilter>(
     getDefaultOpportunityFilter(initialState.opportunities),
   );
+  const [replyStateFilter, setReplyStateFilter] =
+    useState<ReplyStateFilter>("not-replied");
   const currentProject = useMemo(
     () =>
       dashboard.projects.find(
@@ -183,6 +260,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
     [dashboard.opportunities],
   );
   const hasActions = dashboard.actions.length > 0;
+  const hasSavedPostDrafts = dashboard.postDrafts.length > 0;
   const hasSubreddits = dashboard.subreddits.length > 0;
   const hasTrackedPosts = dashboard.trackedPosts.length > 0;
   const trackedPostTotals = useMemo(
@@ -201,6 +279,14 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
   );
   const visibleOpportunities = dashboard.opportunities.filter((opportunity) => {
     if (opportunity.status === "DISMISSED") {
+      return false;
+    }
+
+    if (replyStateFilter === "replied") {
+      if (opportunity.status !== "REPLIED") {
+        return false;
+      }
+    } else if (opportunity.status === "REPLIED") {
       return false;
     }
 
@@ -229,6 +315,29 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
   function closeComposer() {
     setComposerMode(null);
     setError(null);
+  }
+
+  function openPostDraftPanel(postDraft: PostDraftPanelState) {
+    setActivePostDraft(postDraft);
+  }
+
+  function closePostDraftPanel() {
+    setActivePostDraft(null);
+  }
+
+  async function copyDraftToClipboard(
+    draftKey: string,
+    text: string,
+    label: string,
+  ) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedDraftKey(draftKey);
+      setNotice(`${label} copied to clipboard.`);
+      setError(null);
+    } catch {
+      setError(`Could not copy the ${label.toLowerCase()}.`);
+    }
   }
 
   async function handleAutofill() {
@@ -317,9 +426,9 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
         ? "Discovery run saved to your workspace."
         : "Preview generated. Add Neon + Clerk to persist it.",
     );
-    setPostDrafts({});
-    setReplyDrafts({});
-    setReplyScores({});
+    setPostDrafts(buildPostDraftState(payload.dashboard.postDrafts));
+    setReplyDrafts(buildReplyDraftState(payload.dashboard.opportunities));
+    setReplyScores(buildReplyScoreState(payload.dashboard.opportunities));
     router.refresh();
   }
 
@@ -333,6 +442,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        opportunityId: opportunity.id,
         productName: form.productName,
         productDescription: form.productDescription,
         subreddit: opportunity.subreddit,
@@ -361,6 +471,18 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
     setReplyScores((current) => ({
       ...current,
       [opportunity.id]: payload.softPromotionScore ?? 0,
+    }));
+    setDashboard((current) => ({
+      ...current,
+      opportunities: current.opportunities.map((item) =>
+        item.id === opportunity.id
+          ? {
+              ...item,
+              replyDraft: payload.reply as string,
+              replySoftPromotionScore: payload.softPromotionScore ?? 0,
+            }
+          : item,
+      ),
     }));
   }
 
@@ -446,6 +568,8 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        projectId: dashboard.currentProjectId,
+        actionKey: action.id,
         productName: form.productName,
         productDescription: form.productDescription,
         subreddit: action.subreddit,
@@ -487,6 +611,40 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
           issues: payload.review?.issues || [],
         },
       },
+    }));
+    openPostDraftPanel({
+      actionKey: action.id,
+      subreddit: action.subreddit,
+      title: payload.title as string,
+      body: payload.body as string,
+      rules: payload.rules || [],
+      review: {
+        verdict: payload.review?.verdict || "review-needed",
+        summary:
+          payload.review?.summary ||
+          "Review this draft against the subreddit rules before posting.",
+        issues: payload.review?.issues || [],
+      },
+      updatedAt: new Date().toISOString(),
+    });
+    setDashboard((current) => ({
+      ...current,
+      postDrafts: upsertPostDraftList(current.postDrafts, {
+        id: action.id,
+        actionKey: action.id,
+        subreddit: action.subreddit,
+        title: payload.title as string,
+        body: payload.body as string,
+        rules: payload.rules || [],
+        review: {
+          verdict: payload.review?.verdict || "review-needed",
+          summary:
+            payload.review?.summary ||
+            "Review this draft against the subreddit rules before posting.",
+          issues: payload.review?.issues || [],
+        },
+        updatedAt: new Date().toISOString(),
+      }),
     }));
   }
 
@@ -860,63 +1018,27 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                         >
                           Review subreddit
                         </a>
+                        {postDrafts[action.id] ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openPostDraftPanel({
+                                actionKey: action.id,
+                                subreddit: action.subreddit,
+                                title: postDrafts[action.id].title,
+                                body: postDrafts[action.id].body,
+                                rules: postDrafts[action.id].rules,
+                                review: postDrafts[action.id].review,
+                              })
+                            }
+                            className="rounded-full border border-white/18 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
+                          >
+                            View draft
+                          </button>
+                        ) : null}
                       </>
                     )}
                   </div>
-
-                  {postDrafts[action.id] ? (
-                    <div className="mt-4 rounded-3xl border border-white/12 bg-white/10 p-4">
-                      <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#b6d8d9]">
-                        Post draft
-                      </p>
-                      <p className="mt-3 text-base font-semibold text-white">
-                        {postDrafts[action.id]?.title}
-                      </p>
-                      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#e7f2f2]">
-                        {postDrafts[action.id]?.body}
-                      </p>
-
-                      <div className="mt-4 rounded-2xl border border-white/12 bg-black/10 p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#b6d8d9]">
-                            Rules review
-                          </p>
-                          <span className="rounded-full border border-white/12 px-3 py-1 text-xs text-[#e7f2f2]">
-                            {postDrafts[action.id]?.review.verdict}
-                          </span>
-                        </div>
-                        <p className="mt-3 text-sm leading-6 text-[#e7f2f2]">
-                          {postDrafts[action.id]?.review.summary}
-                        </p>
-                        {postDrafts[action.id]?.review.issues.length ? (
-                          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-[#d9ecec]">
-                            {postDrafts[action.id]?.review.issues.map(
-                              (issue) => (
-                                <li key={issue}>{issue}</li>
-                              ),
-                            )}
-                          </ul>
-                        ) : null}
-                        {postDrafts[action.id]?.rules.length ? (
-                          <div className="mt-4">
-                            <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#b6d8d9]">
-                              Fetched subreddit rules
-                            </p>
-                            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-[#d9ecec]">
-                              {postDrafts[action.id]?.rules.map((rule) => (
-                                <li key={rule}>{rule}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        ) : (
-                          <p className="mt-3 text-sm leading-6 text-[#d9ecec]">
-                            Could not fetch subreddit rules automatically.
-                            Verify the rules manually before posting.
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
               );
             })
@@ -928,6 +1050,225 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
           )}
         </div>
       </section>
+
+      <section className="rounded-[28px] border border-black/10 bg-white/90 p-6 shadow-[0_16px_40px_rgba(20,17,15,0.08)]">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[#14110f]">
+              Saved drafts
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-[#5b524a]">
+              Generated post drafts stay here per project even when the current
+              top posting subreddit changes after a refresh.
+            </p>
+          </div>
+          {currentProject ? (
+            <span className="rounded-full border border-black/10 bg-[#fffaf0] px-4 py-2 text-sm text-[#5b524a]">
+              {dashboard.postDrafts.length} saved
+            </span>
+          ) : null}
+        </div>
+
+        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          {hasSavedPostDrafts ? (
+            dashboard.postDrafts.map((postDraft) => (
+              <article
+                key={postDraft.id}
+                className="rounded-[24px] border border-black/8 bg-[#fffaf0] p-5 shadow-[0_16px_40px_rgba(20,17,15,0.04)]"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#8b8278]">
+                      r/{postDraft.subreddit}
+                    </p>
+                    <h3 className="mt-2 text-lg font-semibold text-[#14110f]">
+                      {postDraft.title}
+                    </h3>
+                  </div>
+                  <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-[#5b524a]">
+                    {formatDateTime(postDraft.updatedAt)}
+                  </span>
+                </div>
+                <p className="mt-3 line-clamp-5 whitespace-pre-wrap text-sm leading-6 text-[#4f4740]">
+                  {postDraft.body}
+                </p>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-[#5b524a]">
+                    {postDraft.review.verdict}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openPostDraftPanel({
+                        actionKey: postDraft.actionKey,
+                        subreddit: postDraft.subreddit,
+                        title: postDraft.title,
+                        body: postDraft.body,
+                        rules: postDraft.rules,
+                        review: postDraft.review,
+                        updatedAt: postDraft.updatedAt,
+                      })
+                    }
+                    className="rounded-full border border-black/10 px-3 py-1.5 text-xs font-semibold text-[#14110f] transition hover:bg-black/5"
+                  >
+                    View draft
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      copyDraftToClipboard(
+                        `saved-post:${postDraft.actionKey}`,
+                        `${postDraft.title}\n\n${postDraft.body}`,
+                        "Post draft",
+                      )
+                    }
+                    className="rounded-full border border-black/10 px-3 py-1.5 text-xs font-semibold text-[#14110f] transition hover:bg-black/5"
+                  >
+                    {copiedDraftKey === `saved-post:${postDraft.actionKey}`
+                      ? "Copied"
+                      : "Copy draft"}
+                  </button>
+                  <a
+                    href={buildSubredditSubmitPath(postDraft.subreddit)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-full border border-black/10 px-3 py-1.5 text-xs font-semibold text-[#14110f] transition hover:bg-black/5"
+                  >
+                    Open submit
+                  </a>
+                </div>
+              </article>
+            ))
+          ) : (
+            <div className="rounded-3xl border border-black/8 bg-[#fffaf0] p-6 text-sm leading-6 text-[#5b524a] lg:col-span-2">
+              Draft a subreddit-native post and it will stay here for this
+              project even if the action card changes later.
+            </div>
+          )}
+        </div>
+      </section>
+
+      {activePostDraft ? (
+        <div className="fixed inset-0 z-40 flex justify-start bg-black/28 backdrop-blur-[2px]">
+          <div className="h-full w-full max-w-xl overflow-y-auto border-r border-black/10 bg-[#fffaf0] p-6 shadow-[20px_0_60px_rgba(20,17,15,0.18)] sm:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#8b8278]">
+                  Post draft
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[#14110f]">
+                  r/{activePostDraft.subreddit}
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-[#5b524a]">
+                  Review, copy, and refine the draft before posting it to the
+                  subreddit.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closePostDraftPanel}
+                className="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-6 flex flex-wrap gap-2">
+              <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-[#5b524a]">
+                {activePostDraft.review.verdict}
+              </span>
+              {activePostDraft.updatedAt ? (
+                <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-[#5b524a]">
+                  Updated {formatDateTime(activePostDraft.updatedAt)}
+                </span>
+              ) : null}
+            </div>
+
+            <div className="mt-6 space-y-4 rounded-[28px] border border-black/10 bg-white p-5 shadow-[0_16px_40px_rgba(20,17,15,0.06)]">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#8b8278]">
+                  Draft content
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      copyDraftToClipboard(
+                        `post:${activePostDraft.actionKey}`,
+                        `${activePostDraft.title}\n\n${activePostDraft.body}`,
+                        "Post draft",
+                      )
+                    }
+                    className="rounded-full border border-black/10 px-3 py-1.5 text-xs font-semibold text-[#14110f] transition hover:bg-black/5"
+                  >
+                    {copiedDraftKey === `post:${activePostDraft.actionKey}`
+                      ? "Copied"
+                      : "Copy draft"}
+                  </button>
+                  <a
+                    href={buildSubredditSubmitPath(activePostDraft.subreddit)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-full border border-black/10 px-3 py-1.5 text-xs font-semibold text-[#14110f] transition hover:bg-black/5"
+                  >
+                    Open submit
+                  </a>
+                </div>
+              </div>
+              <p className="text-lg font-semibold text-[#14110f]">
+                {activePostDraft.title}
+              </p>
+              <p className="whitespace-pre-wrap text-sm leading-6 text-[#4f4740]">
+                {activePostDraft.body}
+              </p>
+            </div>
+
+            <div className="mt-6 rounded-[28px] border border-black/10 bg-white p-5 shadow-[0_16px_40px_rgba(20,17,15,0.06)]">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#8b8278]">
+                  Rules review
+                </p>
+                <span className="rounded-full border border-black/10 bg-[#fffaf0] px-3 py-1 text-xs text-[#5b524a]">
+                  {activePostDraft.review.verdict}
+                </span>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-[#4f4740]">
+                {activePostDraft.review.summary}
+              </p>
+              {activePostDraft.review.issues.length ? (
+                <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-[#4f4740]">
+                  {activePostDraft.review.issues.map((issue) => (
+                    <li key={issue}>{issue}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {activePostDraft.rules.length ? (
+                <div className="mt-4">
+                  <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#8b8278]">
+                    Fetched subreddit rules
+                  </p>
+                  <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-[#4f4740]">
+                    {activePostDraft.rules.map((rule) => (
+                      <li key={rule}>{rule}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="mt-3 text-sm leading-6 text-[#5b524a]">
+                  Could not fetch subreddit rules automatically. Verify the
+                  rules manually before posting.
+                </p>
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            aria-label="Close post draft panel"
+            onClick={closePostDraftPanel}
+            className="flex-1"
+          />
+        </div>
+      ) : null}
 
       <section className="grid gap-6 lg:grid-cols-[0.72fr_1.28fr]">
         <div className="rounded-[28px] border border-black/10 bg-white/90 p-6 shadow-[0_16px_40px_rgba(20,17,15,0.08)]">
@@ -997,12 +1338,6 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                 and replied states.
               </p>
             </div>
-            <Link
-              href="/"
-              className="text-sm font-medium text-[#155e63] underline-offset-4 hover:underline"
-            >
-              View product story
-            </Link>
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -1028,6 +1363,31 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
               }`}
             >
               Low
+            </button>
+            <span className="ml-2 text-sm font-medium text-[#5b524a]">
+              Reply:
+            </span>
+            <button
+              type="button"
+              onClick={() => setReplyStateFilter("not-replied")}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                replyStateFilter === "not-replied"
+                  ? "bg-[#14110f] text-[#fffaf0]"
+                  : "border border-black/10 text-[#14110f] hover:bg-black/5"
+              }`}
+            >
+              Not replied
+            </button>
+            <button
+              type="button"
+              onClick={() => setReplyStateFilter("replied")}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                replyStateFilter === "replied"
+                  ? "bg-[#14110f] text-[#fffaf0]"
+                  : "border border-black/10 text-[#14110f] hover:bg-black/5"
+              }`}
+            >
+              Replied
             </button>
           </div>
 
@@ -1133,13 +1493,30 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                       {replyDrafts[opportunity.id] ? (
                         <div className="mt-4 rounded-3xl border border-[#155e63]/20 bg-[#155e63]/6 p-4">
                           <div className="flex items-center justify-between gap-4">
-                            <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#155e63]">
-                              Reply draft
-                            </p>
-                            <p className="text-xs text-[#155e63]">
-                              Soft-promo score:{" "}
-                              {replyScores[opportunity.id] ?? 0}
-                            </p>
+                            <div>
+                              <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#155e63]">
+                                Reply draft
+                              </p>
+                              <p className="mt-1 text-xs text-[#155e63]">
+                                Soft-promo score:{" "}
+                                {replyScores[opportunity.id] ?? 0}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                copyDraftToClipboard(
+                                  `reply:${opportunity.id}`,
+                                  replyDrafts[opportunity.id],
+                                  "Reply draft",
+                                )
+                              }
+                              className="rounded-full border border-[#155e63]/20 px-3 py-1.5 text-xs font-semibold text-[#155e63] transition hover:bg-[#155e63]/10"
+                            >
+                              {copiedDraftKey === `reply:${opportunity.id}`
+                                ? "Copied"
+                                : "Copy draft"}
+                            </button>
                           </div>
                           <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#1f3133]">
                             {replyDrafts[opportunity.id]}
@@ -1152,8 +1529,9 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
               )
             ) : (
               <div className="rounded-3xl border border-black/8 bg-[#fffaf0] p-6 text-sm leading-6 text-[#5b524a]">
-                No {opportunityFilter}-intent opportunities right now. Adjust
-                the filter or run discovery again to refresh the inbox.
+                No {opportunityFilter}-intent {replyStateFilter} opportunities
+                right now. Adjust the filters or run discovery again to refresh
+                the inbox.
               </div>
             )}
           </div>

@@ -12,6 +12,8 @@ export type OpportunityCard = {
   commentsCount: number;
   intentScore: number;
   riskScore: number;
+  replyDraft?: string;
+  replySoftPromotionScore?: number;
   status: WorkflowStatus;
   discoveredAt: string;
 };
@@ -61,6 +63,21 @@ export type TrackedPostCard = {
   lastSyncedAt: string;
 };
 
+export type PostDraftCard = {
+  id: string;
+  actionKey: string;
+  subreddit: string;
+  title: string;
+  body: string;
+  rules: string[];
+  review: {
+    verdict: "looks-safe" | "review-needed" | "likely-to-be-removed";
+    summary: string;
+    issues: string[];
+  };
+  updatedAt: string;
+};
+
 export type DashboardState = {
   configured: {
     clerk: boolean;
@@ -83,6 +100,7 @@ export type DashboardState = {
     averageIntent: number;
   };
   trackedPosts: TrackedPostCard[];
+  postDrafts: PostDraftCard[];
   actions: ActionCard[];
   subreddits: SubredditCard[];
   opportunities: OpportunityCard[];

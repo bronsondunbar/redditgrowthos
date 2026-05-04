@@ -26,6 +26,12 @@ type PostRuleReviewInput = {
   body: string;
 };
 
+type PostRuleReview = {
+  verdict: "looks-safe" | "review-needed" | "likely-to-be-removed";
+  summary: string;
+  issues: string[];
+};
+
 const openai = isOpenAiConfigured
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   : null;
@@ -104,7 +110,7 @@ Curious how other teams in r/${input.subreddit} handle this today.`;
   };
 }
 
-function buildFallbackPostReview(input: PostRuleReviewInput) {
+function buildFallbackPostReview(input: PostRuleReviewInput): PostRuleReview {
   const combined = `${input.title} ${input.body}`.toLowerCase();
   const issues: string[] = [];
 
@@ -221,7 +227,9 @@ export async function generatePostSuggestion(input: PostDraftInput) {
   }
 }
 
-export async function reviewPostAgainstRules(input: PostRuleReviewInput) {
+export async function reviewPostAgainstRules(
+  input: PostRuleReviewInput,
+): Promise<PostRuleReview> {
   const fallbackReview = buildFallbackPostReview(input);
 
   if (!openai || !input.rules.length) {
@@ -254,7 +262,7 @@ export async function reviewPostAgainstRules(input: PostRuleReviewInput) {
       return fallbackReview;
     }
 
-    const verdict =
+    const verdict: PostRuleReview["verdict"] =
       parsed.verdict === "likely-to-be-removed" ||
       parsed.verdict === "review-needed" ||
       parsed.verdict === "looks-safe"
