@@ -28,6 +28,14 @@ type RedditListing = {
 
 type RedditThreadPayload = [RedditListing?, unknown?];
 
+type RedditRulesPayload = {
+  rules?: Array<{
+    short_name?: string;
+    description?: string;
+    violation_reason?: string;
+  }>;
+};
+
 const redditHeaders = {
   "User-Agent": "RedditGrowthOS/0.1 (founder workflow discovery)",
 };
@@ -301,6 +309,31 @@ export async function fetchTrackedRedditPost(
     ).toISOString(),
     lastSyncedAt: new Date().toISOString(),
   };
+}
+
+export async function fetchSubredditRules(subreddit: string) {
+  const url = new URL(`https://www.reddit.com/r/${subreddit}/about/rules.json`);
+  const response = await fetch(url, {
+    headers: redditHeaders,
+    next: { revalidate: 3600 },
+  });
+
+  if (!response.ok) {
+    return [];
+  }
+
+  const payload = (await response.json()) as RedditRulesPayload;
+
+  return (payload.rules || [])
+    .map((rule) => {
+      const parts = [rule.short_name, rule.description, rule.violation_reason]
+        .map((part) => part?.trim())
+        .filter(Boolean);
+
+      return parts.join(" — ");
+    })
+    .filter(Boolean)
+    .slice(0, 12);
 }
 
 function expandDiscoveryQueries(keywords: string[]) {

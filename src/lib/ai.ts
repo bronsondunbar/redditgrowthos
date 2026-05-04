@@ -11,6 +11,21 @@ type ReplyInput = {
   excerpt: string;
 };
 
+type PostDraftInput = {
+  productName: string;
+  productDescription: string;
+  subreddit: string;
+  summary: string;
+  riskNote: string;
+};
+
+type PostRuleReviewInput = {
+  subreddit: string;
+  rules: string[];
+  title: string;
+  body: string;
+};
+
 const openai = isOpenAiConfigured
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   : null;
@@ -73,6 +88,45 @@ function buildFallbackReply(input: ReplyInput) {
   return `${firstSentence} ${secondSentence} ${finalSentence}`;
 }
 
+function buildFallbackPost(input: PostDraftInput) {
+  const title = `What finally improved this workflow for our team`;
+  const body = `We kept seeing the same pain point come up around ${input.productDescription.toLowerCase()}.
+
+What helped most was simplifying the workflow first instead of adding more tools or more process.
+
+For us, the useful shift was to document one repeatable loop, decide what signal mattered most, and only then build around that.
+
+Curious how other teams in r/${input.subreddit} handle this today.`;
+
+  return {
+    title,
+    body,
+  };
+}
+
+function buildFallbackPostReview(input: PostRuleReviewInput) {
+  const combined = `${input.title} ${input.body}`.toLowerCase();
+  const issues: string[] = [];
+
+  if (/http|www\./i.test(combined)) {
+    issues.push("The draft includes a link, which many subreddits restrict.");
+  }
+
+  if (/buy|demo|pricing|discount|signup|sign up/i.test(combined)) {
+    issues.push(
+      "The draft reads promotional in places and may trigger self-promo rules.",
+    );
+  }
+
+  return {
+    verdict: issues.length ? "review-needed" : "looks-safe",
+    summary: issues.length
+      ? "No obvious rule match failed automatically, but this draft still needs a manual rules pass."
+      : "Nothing in the draft obviously conflicts with the fetched subreddit rules, but you should still verify manually.",
+    issues,
+  };
+}
+
 export async function generateReplySuggestion(input: ReplyInput) {
   const fallbackReply = buildFallbackReply(input);
 
@@ -113,6 +167,112 @@ export async function generateReplySuggestion(input: ReplyInput) {
       softPromotionScore: computeSoftPromotionScore(fallbackReply),
       source: "template" as const,
     };
+  }
+}
+
+export async function generatePostSuggestion(input: PostDraftInput) {
+  const fallbackDraft = buildFallbackPost(input);
+
+  if (!openai) {
+    return {
+      ...fallbackDraft,
+      source: "template" as const,
+    };
+  }
+
+  try {
+    const response = await openai.responses.create({
+      model: openAiModel,
+      input: [
+        {
+          role: "system",
+          content:
+            "You write subreddit-native Reddit posts for founders. Avoid sounding promotional. Return only valid JSON.",
+        },
+        {
+          role: "user",
+          content: `Return JSON with keys title and body.\n\nRules:\n- Write a post that feels native to r/${input.subreddit}.\n- Lead with a concrete lesson, story, or question.\n- Do not include links.\n- Do not mention the product name unless it is necessary, and if used keep it minimal.\n- Body should be 4-7 short paragraphs.\n- Keep the tone useful, candid, and discussion-oriented.\n\nProduct: ${input.productName}\nProduct description: ${input.productDescription}\nAction summary: ${input.summary}\nRisk note: ${input.riskNote}`,
+        },
+      ],
+    });
+
+    const parsed = JSON.parse(stripCodeFence(response.output_text || "{}")) as {
+      title?: string;
+      body?: string;
+    };
+
+    if (!parsed.title?.trim() || !parsed.body?.trim()) {
+      return {
+        ...fallbackDraft,
+        source: "template" as const,
+      };
+    }
+
+    return {
+      title: parsed.title.trim(),
+      body: parsed.body.trim(),
+      source: "ai" as const,
+    };
+  } catch {
+    return {
+      ...fallbackDraft,
+      source: "template" as const,
+    };
+  }
+}
+
+export async function reviewPostAgainstRules(input: PostRuleReviewInput) {
+  const fallbackReview = buildFallbackPostReview(input);
+
+  if (!openai || !input.rules.length) {
+    return fallbackReview;
+  }
+
+  try {
+    const response = await openai.responses.create({
+      model: openAiModel,
+      input: [
+        {
+          role: "system",
+          content:
+            "You review drafted Reddit posts against subreddit rules. Return only valid JSON.",
+        },
+        {
+          role: "user",
+          content: `Return JSON with keys verdict, summary, and issues.\n\nRules:\n- verdict must be one of: looks-safe, review-needed, likely-to-be-removed.\n- summary must be one short sentence.\n- issues must be an array of concise strings.\n- Be conservative. If the rules are ambiguous, prefer review-needed.\n\nSubreddit: r/${input.subreddit}\nRules:\n${input.rules.map((rule, index) => `${index + 1}. ${rule}`).join("\n")}\n\nDraft title: ${input.title}\nDraft body: ${input.body}`,
+        },
+      ],
+    });
+
+    const parsed = JSON.parse(stripCodeFence(response.output_text || "{}")) as {
+      verdict?: string;
+      summary?: string;
+      issues?: string[];
+    };
+
+    if (!parsed.summary?.trim()) {
+      return fallbackReview;
+    }
+
+    const verdict =
+      parsed.verdict === "likely-to-be-removed" ||
+      parsed.verdict === "review-needed" ||
+      parsed.verdict === "looks-safe"
+        ? parsed.verdict
+        : fallbackReview.verdict;
+
+    return {
+      verdict,
+      summary: parsed.summary.trim(),
+      issues: Array.isArray(parsed.issues)
+        ? parsed.issues
+            .map((issue) => issue.trim())
+            .filter(Boolean)
+            .slice(0, 5)
+        : fallbackReview.issues,
+    };
+  } catch {
+    return fallbackReview;
   }
 }
 

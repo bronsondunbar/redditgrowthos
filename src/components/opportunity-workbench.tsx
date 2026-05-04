@@ -136,9 +136,25 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
   const [notice, setNotice] = useState<string | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [replyScores, setReplyScores] = useState<Record<string, number>>({});
+  const [postDrafts, setPostDrafts] = useState<
+    Record<
+      string,
+      {
+        title: string;
+        body: string;
+        rules: string[];
+        review: {
+          verdict: "looks-safe" | "review-needed" | "likely-to-be-removed";
+          summary: string;
+          issues: string[];
+        };
+      }
+    >
+  >({});
   const [busyOpportunityId, setBusyOpportunityId] = useState<string | null>(
     null,
   );
+  const [busyPostActionId, setBusyPostActionId] = useState<string | null>(null);
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [isAutofilling, setIsAutofilling] = useState(false);
   const [trackedPostUrl, setTrackedPostUrl] = useState("");
@@ -301,6 +317,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
         ? "Discovery run saved to your workspace."
         : "Preview generated. Add Neon + Clerk to persist it.",
     );
+    setPostDrafts({});
     setReplyDrafts({});
     setReplyScores({});
     router.refresh();
@@ -412,6 +429,65 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
     }
 
     await generateReply(opportunity);
+  }
+
+  async function handleActionPostDraft(action: {
+    id: string;
+    subreddit: string;
+    summary: string;
+    riskNote: string;
+  }) {
+    setBusyPostActionId(action.id);
+    setError(null);
+
+    const response = await fetch("/api/post", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        productName: form.productName,
+        productDescription: form.productDescription,
+        subreddit: action.subreddit,
+        summary: action.summary,
+        riskNote: action.riskNote,
+      }),
+    });
+
+    const payload = (await response.json()) as {
+      title?: string;
+      body?: string;
+      rules?: string[];
+      review?: {
+        verdict?: "looks-safe" | "review-needed" | "likely-to-be-removed";
+        summary?: string;
+        issues?: string[];
+      };
+      error?: string;
+    };
+
+    setBusyPostActionId(null);
+
+    if (!response.ok || !payload.title || !payload.body) {
+      setError(payload.error || "Post draft generation failed.");
+      return;
+    }
+
+    setPostDrafts((current) => ({
+      ...current,
+      [action.id]: {
+        title: payload.title as string,
+        body: payload.body as string,
+        rules: payload.rules || [],
+        review: {
+          verdict: payload.review?.verdict || "review-needed",
+          summary:
+            payload.review?.summary ||
+            "Review this draft against the subreddit rules before posting.",
+          issues: payload.review?.issues || [],
+        },
+      },
+    }));
   }
 
   async function handleTrackPost(event: React.FormEvent<HTMLFormElement>) {
@@ -751,6 +827,23 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                       </>
                     ) : (
                       <>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleActionPostDraft({
+                              id: action.id,
+                              subreddit: action.subreddit,
+                              summary: action.summary,
+                              riskNote: action.riskNote,
+                            })
+                          }
+                          disabled={busyPostActionId === action.id}
+                          className="rounded-full border border-white/18 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {busyPostActionId === action.id
+                            ? "Drafting..."
+                            : "Draft post"}
+                        </button>
                         <a
                           href={submitUrl}
                           target="_blank"
@@ -770,6 +863,60 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                       </>
                     )}
                   </div>
+
+                  {postDrafts[action.id] ? (
+                    <div className="mt-4 rounded-3xl border border-white/12 bg-white/10 p-4">
+                      <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#b6d8d9]">
+                        Post draft
+                      </p>
+                      <p className="mt-3 text-base font-semibold text-white">
+                        {postDrafts[action.id]?.title}
+                      </p>
+                      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#e7f2f2]">
+                        {postDrafts[action.id]?.body}
+                      </p>
+
+                      <div className="mt-4 rounded-2xl border border-white/12 bg-black/10 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#b6d8d9]">
+                            Rules review
+                          </p>
+                          <span className="rounded-full border border-white/12 px-3 py-1 text-xs text-[#e7f2f2]">
+                            {postDrafts[action.id]?.review.verdict}
+                          </span>
+                        </div>
+                        <p className="mt-3 text-sm leading-6 text-[#e7f2f2]">
+                          {postDrafts[action.id]?.review.summary}
+                        </p>
+                        {postDrafts[action.id]?.review.issues.length ? (
+                          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-[#d9ecec]">
+                            {postDrafts[action.id]?.review.issues.map(
+                              (issue) => (
+                                <li key={issue}>{issue}</li>
+                              ),
+                            )}
+                          </ul>
+                        ) : null}
+                        {postDrafts[action.id]?.rules.length ? (
+                          <div className="mt-4">
+                            <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#b6d8d9]">
+                              Fetched subreddit rules
+                            </p>
+                            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-[#d9ecec]">
+                              {postDrafts[action.id]?.rules.map((rule) => (
+                                <li key={rule}>{rule}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-sm leading-6 text-[#d9ecec]">
+                            Could not fetch subreddit rules automatically.
+                            Verify the rules manually before posting.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               );
             })
