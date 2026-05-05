@@ -18,15 +18,15 @@ type AppShellProps = {
 function BrandBlock() {
   return (
     <div>
-      <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#155e63]/10 text-[#155e63]">
+      <div className="flex items-center gap-3">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#155e63]/10 text-[#155e63]">
           <Radar className="h-4 w-4" strokeWidth={2.2} />
         </span>
         <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#8b8278]">
           {appConfig.name}
         </p>
       </div>
-      <p className="text-sm text-[#5b524a]">
+      <p className="mt-1 text-sm text-[#5b524a]">
         Find leads on Reddit and know exactly what to do daily.
       </p>
     </div>
@@ -38,7 +38,7 @@ function SharedNavLinks() {
     <>
       <Link
         href="/"
-        className="rounded-full border border-transparent px-4 py-2 text-sm font-medium text-[#14110f] transition hover:border-black/10 hover:bg-black/5"
+        className="rounded-full px-4 py-2 text-sm font-medium text-[#14110f] transition hover:bg-black/5"
       >
         Home
       </Link>
@@ -57,7 +57,7 @@ function AuthActions() {
     return (
       <Link
         href="/dashboard"
-        className="inline-flex min-w-40 items-center justify-center rounded-full bg-[#d95d39] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(217,93,57,0.28)] transition hover:bg-[#c34f2d]"
+        className="app-button app-button-primary min-w-40"
         style={{ color: "#ffffff", WebkitTextFillColor: "#ffffff" }}
       >
         Open preview
@@ -71,7 +71,7 @@ function AuthActions() {
         <div className="flex items-center gap-3">
           <SignInButton mode="modal">
             <button
-              className="inline-flex min-w-32 items-center justify-center rounded-full border border-black/12 bg-white px-5 py-3 text-sm font-semibold text-[#14110f] shadow-[inset_0_0_0_1px_rgba(20,17,15,0.02)] transition hover:bg-black/5"
+              className="app-button app-button-secondary min-w-32"
               style={{ color: "#14110f", WebkitTextFillColor: "#14110f" }}
             >
               Sign in
@@ -79,7 +79,7 @@ function AuthActions() {
           </SignInButton>
           <SignUpButton mode="modal">
             <button
-              className="inline-flex min-w-40 items-center justify-center rounded-full bg-[#d95d39] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(217,93,57,0.28)] transition hover:bg-[#c34f2d]"
+              className="app-button app-button-primary min-w-40"
               style={{ color: "#ffffff", WebkitTextFillColor: "#ffffff" }}
             >
               Create account
@@ -92,7 +92,7 @@ function AuthActions() {
         <div className="flex items-center gap-3">
           <Link
             href="/dashboard"
-            className="inline-flex min-w-44 items-center justify-center rounded-full bg-[#14110f] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(20,17,15,0.22)] transition hover:bg-[#2c2622]"
+            className="app-button app-button-primary min-w-44"
             style={{ color: "#ffffff", WebkitTextFillColor: "#ffffff" }}
           >
             Open workspace
@@ -112,11 +112,9 @@ function AuthActions() {
 
 export function AppShell({ children }: AppShellProps) {
   return (
-    <div className="relative flex min-h-full flex-1 flex-col">
-      <div className="absolute inset-x-0 top-0 -z-10 h-[24rem] bg-[radial-gradient(circle_at_top,_rgba(255,250,240,0.92),_rgba(255,250,240,0))]" />
-
+    <div className="app-shell-bg relative flex min-h-full flex-1 flex-col">
       <header className="sticky top-0 z-30 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
-        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 rounded-full border border-black/10 bg-white/78 px-5 py-3 shadow-[0_8px_30px_rgba(20,17,15,0.08)] backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 rounded-[28px] border border-black/10 bg-[#fffdf8]/92 px-5 py-4 shadow-[0_10px_26px_rgba(20,17,15,0.05)] backdrop-blur">
           <Link href="/" className="min-w-0">
             <BrandBlock />
           </Link>
@@ -133,10 +131,10 @@ export function AppShell({ children }: AppShellProps) {
       <div className="flex-1">{children}</div>
 
       <footer className="px-4 pb-6 pt-10 sm:px-6 lg:px-8 lg:pb-8">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 rounded-[32px] border border-black/10 bg-white/72 px-6 py-6 shadow-[0_16px_40px_rgba(20,17,15,0.06)] backdrop-blur md:flex-row md:items-end md:justify-between">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 rounded-[28px] border border-black/10 bg-[#fffdf8]/88 px-6 py-6 shadow-[0_10px_28px_rgba(20,17,15,0.04)] md:flex-row md:items-end md:justify-between">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#155e63]/10 text-[#155e63]">
+            <div className="flex items-center gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#155e63]/10 text-[#155e63]">
                 <Radar className="h-4 w-4" strokeWidth={2.2} />
               </span>
               <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#8b8278]">
@@ -149,10 +147,17 @@ export function AppShell({ children }: AppShellProps) {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 text-sm text-[#5b524a]">
-            <Link href="/">Home</Link>
-            <Link href="/dashboard">Dashboard</Link>
-            <Link href={isClerkConfigured ? "/sign-in" : "/dashboard"}>
+          <div className="flex flex-wrap items-center gap-4 text-sm text-[#5b524a]">
+            <Link href="/" className="app-link-subtle">
+              Home
+            </Link>
+            <Link href="/dashboard" className="app-link-subtle">
+              Dashboard
+            </Link>
+            <Link
+              href={isClerkConfigured ? "/sign-in" : "/dashboard"}
+              className="app-link-subtle"
+            >
               {isClerkConfigured ? "Auth" : "Preview"}
             </Link>
           </div>

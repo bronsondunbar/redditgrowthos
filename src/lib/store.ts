@@ -14,6 +14,7 @@ import {
   discoverOpportunities,
 } from "@/lib/reddit";
 import type {
+  ActionCard,
   DashboardState,
   DiscoveryPayload,
   OpportunityCard,
@@ -22,6 +23,23 @@ import type {
   TrackedPostCard,
   WorkflowStatus,
 } from "@/lib/types";
+
+function getDailyActionDate(now = new Date()) {
+  return new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
+}
+
+function filterCompletedActions(
+  actions: ActionCard[],
+  completedActionIds?: Set<string>,
+) {
+  if (!completedActionIds?.size) {
+    return actions;
+  }
+
+  return actions.filter((action) => !completedActionIds.has(action.id));
+}
 
 function createDashboardState(input: {
   projects: ProjectSummary[];
@@ -33,10 +51,12 @@ function createDashboardState(input: {
   trackedPosts: TrackedPostCard[];
   postDrafts: PostDraftCard[];
   opportunities: OpportunityCard[];
+  completedActionIds?: Set<string>;
   demoMode: boolean;
   requiresAuth: boolean;
 }): DashboardState {
   const subreddits = buildSubredditSummaries(input.opportunities);
+  const actions = buildDailyActions(input.opportunities, subreddits);
 
   return {
     configured: {
@@ -55,7 +75,7 @@ function createDashboardState(input: {
     trackedPosts: input.trackedPosts,
     postDrafts: input.postDrafts,
     analytics: buildAnalytics(input.opportunities, subreddits),
-    actions: buildDailyActions(input.opportunities, subreddits),
+    actions: filterCompletedActions(actions, input.completedActionIds),
     subreddits,
     opportunities: input.opportunities,
   };
@@ -232,8 +252,8 @@ async function getDashboardStateForUser(
   const currentProject =
     projects.find((project) => project.id === selectedProjectId) || projects[0];
 
-  const [keywords, opportunities, trackedPosts, postDrafts] = await Promise.all(
-    [
+  const [keywords, opportunities, trackedPosts, postDrafts, completions] =
+    await Promise.all([
       prisma.trackedKeyword.findMany({
         where: { userId, projectId: currentProject.id },
         orderBy: { createdAt: "asc" },
@@ -254,8 +274,17 @@ async function getDashboardStateForUser(
         orderBy: [{ updatedAt: "desc" }],
         take: 12,
       }),
-    ],
-  );
+      prisma.dailyActionCompletion.findMany({
+        where: {
+          userId,
+          projectId: currentProject.id,
+          actionDate: getDailyActionDate(),
+        },
+        select: {
+          actionId: true,
+        },
+      }),
+    ]);
 
   return createDashboardState({
     projects: projects.map(toProjectSummary),
@@ -267,6 +296,9 @@ async function getDashboardStateForUser(
     trackedPosts: trackedPosts.map(toTrackedPostCard),
     postDrafts: postDrafts.map(toPostDraftCard),
     opportunities: opportunities.map(toOpportunityCard),
+    completedActionIds: new Set(
+      completions.map((completion) => completion.actionId),
+    ),
     demoMode: false,
     requiresAuth: false,
   });
@@ -338,6 +370,13 @@ async function persistProjectDiscovery(input: {
   if (!db) {
     return input.dashboard;
   }
+
+  await db.dailyActionCompletion.deleteMany({
+    where: {
+      userId: input.userId,
+      projectId: input.projectId,
+    },
+  });
 
   await db.trackedKeyword.deleteMany({
     where: {
@@ -747,4 +786,49 @@ export async function saveReplyDraft(
   });
 
   return toOpportunityCard(updatedOpportunity);
+}
+
+export async function completeDailyAction(input: {
+  userId: string;
+  projectId: string;
+  actionId: string;
+}) {
+  if (!prisma) {
+    return false;
+  }
+
+  const project = await prisma.project.findFirst({
+    where: {
+      id: input.projectId,
+      userId: input.userId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!project) {
+    return false;
+  }
+
+  await prisma.dailyActionCompletion.upsert({
+    where: {
+      projectId_actionId_actionDate: {
+        projectId: project.id,
+        actionId: input.actionId,
+        actionDate: getDailyActionDate(),
+      },
+    },
+    update: {
+      completedAt: new Date(),
+    },
+    create: {
+      userId: input.userId,
+      projectId: project.id,
+      actionId: input.actionId,
+      actionDate: getDailyActionDate(),
+    },
+  });
+
+  return true;
 }

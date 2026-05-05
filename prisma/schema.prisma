@@ -25,6 +25,7 @@ model User {
   opportunities      Opportunity[]
   trackedPosts       TrackedPost[]
   postDrafts         PostDraft[]
+  dailyActionCompletions DailyActionCompletion[]
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 }
@@ -40,10 +41,25 @@ model Project {
   opportunities  Opportunity[]
   trackedPosts   TrackedPost[]
   postDrafts     PostDraft[]
+  dailyActionCompletions DailyActionCompletion[]
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
   @@index([userId, updatedAt])
+}
+
+model DailyActionCompletion {
+  id          String   @id @default(cuid())
+  userId      String
+  projectId   String
+  actionId    String
+  actionDate  DateTime
+  completedAt DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, actionId, actionDate])
+  @@index([userId, projectId, actionDate])
 }
 
 model TrackedKeyword {

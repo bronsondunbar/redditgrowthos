@@ -6,11 +6,12 @@ export default function SignUpPage() {
   if (!isClerkConfigured) {
     return (
       <div className="mx-auto flex min-h-[70vh] w-full max-w-3xl items-center px-6 py-16">
-        <div className="w-full rounded-[32px] border border-black/10 bg-white/90 p-8 shadow-[0_24px_80px_rgba(20,17,15,0.12)]">
-          <h1 className="text-3xl font-semibold tracking-[-0.05em] text-[#14110f]">
+        <div className="app-panel w-full p-8">
+          <span className="app-kicker">Authentication setup</span>
+          <h1 className="app-title mt-4 text-3xl">
             Add Clerk keys to enable sign-up
           </h1>
-          <p className="mt-4 text-base leading-7 text-[#4f4740]">
+          <p className="app-copy mt-4 text-base">
             Once the publishable and secret keys are present, this route will
             render the sign-up flow automatically.
           </p>

@@ -1,12 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --background: #efe7d8;
+  --background: #f6f4ef;
   --foreground: #14110f;
-  --card: #fffaf0;
-  --muted: #6f675f;
+  --card: #fffdf8;
+  --muted: #6b6258;
+  --surface: #f3f0e8;
+  --surface-strong: #e8e1d3;
+  --border: rgba(20, 17, 15, 0.12);
   --teal: #155e63;
   --orange: #d95d39;
+  --orange-deep: #bf4f30;
+  --ink-soft: #4f4740;
 }
 
 @theme inline {
@@ -25,18 +30,7 @@ html {
 }
 
 body {
-  background:
-    radial-gradient(
-      circle at top left,
-      rgba(217, 93, 57, 0.2),
-      transparent 24%
-    ),
-    radial-gradient(
-      circle at top right,
-      rgba(21, 94, 99, 0.22),
-      transparent 28%
-    ),
-    linear-gradient(180deg, #f7f1e7 0%, #efe7d8 52%, #ebe1cf 100%);
+  background: var(--background);
   color: var(--foreground);
   font-family: var(--font-space-grotesk), sans-serif;
   min-height: 100vh;
@@ -53,6 +47,101 @@ a {
 
 ::selection {
   background: rgba(217, 93, 57, 0.18);
+  color: var(--foreground);
+}
+
+.app-shell-bg {
+  background: var(--background);
+}
+
+.app-panel {
+  border: 1px solid var(--border);
+  background: #fffdf8;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.app-panel-muted {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.app-panel-strong {
+  border: 1px solid rgba(20, 17, 15, 0.08);
+  background: var(--teal);
+  color: #f7fbfb;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.app-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 0.4rem 0.8rem;
+  font-family: var(--font-ibm-plex-mono), monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  color: #7b7267;
+}
+
+.app-title {
+  color: var(--foreground);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.app-copy {
+  color: var(--ink-soft);
+  line-height: 1.75;
+}
+
+.app-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  padding: 0.65rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.app-button-primary {
+  background: var(--orange);
+  color: #fff;
+  box-shadow: none;
+}
+
+.app-button-primary:hover {
+  background: var(--orange-deep);
+}
+
+.app-button-secondary {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--foreground);
+}
+
+.app-button-secondary:hover {
+  background: rgba(20, 17, 15, 0.04);
+}
+
+.app-link-subtle {
+  color: var(--ink-soft);
+  transition: color 160ms ease;
+}
+
+.app-link-subtle:hover {
   color: var(--foreground);
 }
 
