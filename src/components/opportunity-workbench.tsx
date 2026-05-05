@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startTransition, useMemo, useState } from "react";
@@ -8,7 +9,6 @@ import type {
   DashboardState,
   OpportunityCard,
   PostDraftCard,
-  ProjectSummary,
   TrackedPostCard,
   WorkflowStatus,
 } from "@/lib/types";
@@ -174,6 +174,25 @@ function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
+function buildFaviconUrl(websiteUrl: string) {
+  const trimmed = websiteUrl.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const normalizedUrl = /^https?:\/\//i.test(trimmed)
+      ? trimmed
+      : `https://${trimmed}`;
+    const url = new URL(normalizedUrl);
+
+    return `https://www.google.com/s2/favicons?sz=64&domain_url=${encodeURIComponent(url.origin)}`;
+  } catch {
+    return null;
+  }
+}
+
 function buildSubredditPath(subreddit: string) {
   return `https://www.reddit.com/r/${subreddit}/`;
 }
@@ -205,6 +224,7 @@ function upsertTrackedPostList(
 
 export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
   const router = useRouter();
+  const isLocalDevelopment = process.env.NODE_ENV !== "production";
   const [dashboard, setDashboard] = useState(initialState);
   const [composerMode, setComposerMode] = useState<"create" | "edit" | null>(
     initialState.projects.length ? null : "create",
@@ -231,6 +251,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
   );
   const [busyPostActionId, setBusyPostActionId] = useState<string | null>(null);
   const [isDiscovering, setIsDiscovering] = useState(false);
+  const [isRefreshingDiscovery, setIsRefreshingDiscovery] = useState(false);
   const [isAutofilling, setIsAutofilling] = useState(false);
   const [trackedPostUrl, setTrackedPostUrl] = useState("");
   const [isTrackingPost, setIsTrackingPost] = useState(false);
@@ -429,6 +450,52 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
     setPostDrafts(buildPostDraftState(payload.dashboard.postDrafts));
     setReplyDrafts(buildReplyDraftState(payload.dashboard.opportunities));
     setReplyScores(buildReplyScoreState(payload.dashboard.opportunities));
+    router.refresh();
+  }
+
+  async function handleRefreshDiscovery() {
+    if (!dashboard.currentProjectId) {
+      setError("Select a project before rerunning discovery.");
+      return;
+    }
+
+    setError(null);
+    setNotice(null);
+    setIsRefreshingDiscovery(true);
+
+    const response = await fetch("/api/opportunities", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        projectId: dashboard.currentProjectId,
+      }),
+    });
+
+    const payload = (await response.json()) as {
+      dashboard?: DashboardState;
+      error?: string;
+      persisted?: boolean;
+    };
+
+    setIsRefreshingDiscovery(false);
+
+    if (!response.ok || !payload.dashboard) {
+      setError(payload.error || "Could not refresh discovery.");
+      return;
+    }
+
+    setDashboard(payload.dashboard);
+    setForm(buildFormState(payload.dashboard));
+    setOpportunityFilter(
+      getDefaultOpportunityFilter(payload.dashboard.opportunities),
+    );
+    setComposerMode(null);
+    setPostDrafts(buildPostDraftState(payload.dashboard.postDrafts));
+    setReplyDrafts(buildReplyDraftState(payload.dashboard.opportunities));
+    setReplyScores(buildReplyScoreState(payload.dashboard.opportunities));
+    setNotice("Discovery rerun completed for the current project.");
     router.refresh();
   }
 
@@ -780,6 +847,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
             {dashboard.projects.length ? (
               dashboard.projects.map((project) => {
                 const isCurrent = project.id === dashboard.currentProjectId;
+                const faviconUrl = buildFaviconUrl(project.websiteUrl);
 
                 return (
                   <Link
@@ -792,13 +860,25 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                     }`}
                   >
                     <div className="flex items-start justify-between gap-4">
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <p className="font-mono text-xs uppercase tracking-[0.2em] text-[#8b8278]">
                           Project
                         </p>
-                        <h3 className="mt-2 text-xl font-semibold tracking-[-0.03em] text-[#14110f]">
-                          {project.name}
-                        </h3>
+                        <div className="mt-2 flex min-w-0 items-center gap-3">
+                          {faviconUrl ? (
+                            <Image
+                              src={faviconUrl}
+                              alt=""
+                              aria-hidden="true"
+                              width={24}
+                              height={24}
+                              className="h-6 w-6 shrink-0 rounded"
+                            />
+                          ) : null}
+                          <h3 className="min-w-0 break-words text-xl font-semibold tracking-[-0.03em] text-[#14110f]">
+                            {project.name}
+                          </h3>
+                        </div>
                       </div>
                       {isCurrent ? (
                         <span className="rounded-full bg-[#14110f] px-3 py-1 text-xs font-semibold text-white">
@@ -829,27 +909,60 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
 
       <section className="rounded-[28px] border border-black/10 bg-white/90 p-6 shadow-[0_16px_40px_rgba(20,17,15,0.08)]">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#8b8278]">
               Current project
             </p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[#14110f]">
-              {currentProject?.name || "No project selected"}
-            </h2>
+            <div className="mt-2 flex min-w-0 items-center gap-3">
+              {currentProject?.websiteUrl ? (
+                <Image
+                  src={buildFaviconUrl(currentProject.websiteUrl) || ""}
+                  alt=""
+                  aria-hidden="true"
+                  width={28}
+                  height={28}
+                  className="h-7 w-7 shrink-0 rounded"
+                />
+              ) : null}
+              <h2 className="min-w-0 break-words text-2xl font-semibold tracking-[-0.04em] text-[#14110f]">
+                {currentProject?.name || "No project selected"}
+              </h2>
+            </div>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5b524a]">
               {currentProject?.description ||
                 "Create a project to start tracking separate products or client workspaces inside the same account."}
             </p>
           </div>
           {currentProject?.websiteUrl ? (
-            <a
-              href={currentProject.websiteUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-[#14110f] transition hover:bg-black/5"
+            <div className="flex flex-wrap gap-3">
+              {isLocalDevelopment ? (
+                <button
+                  type="button"
+                  onClick={handleRefreshDiscovery}
+                  disabled={!currentProject || isRefreshingDiscovery}
+                  className="rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-[#14110f] transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isRefreshingDiscovery ? "Refreshing..." : "Re-run discovery"}
+                </button>
+              ) : null}
+              <a
+                href={currentProject.websiteUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-[#14110f] transition hover:bg-black/5"
+              >
+                Visit website
+              </a>
+            </div>
+          ) : isLocalDevelopment && currentProject ? (
+            <button
+              type="button"
+              onClick={handleRefreshDiscovery}
+              disabled={isRefreshingDiscovery}
+              className="rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-[#14110f] transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Visit website
-            </a>
+              {isRefreshingDiscovery ? "Refreshing..." : "Re-run discovery"}
+            </button>
           ) : null}
         </div>
 
@@ -1270,8 +1383,8 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
         </div>
       ) : null}
 
-      <section className="grid gap-6 lg:grid-cols-[0.72fr_1.28fr]">
-        <div className="rounded-[28px] border border-black/10 bg-white/90 p-6 shadow-[0_16px_40px_rgba(20,17,15,0.08)]">
+      <section className="grid gap-6 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]">
+        <div className="min-w-0 rounded-[28px] border border-black/10 bg-white/90 p-6 shadow-[0_16px_40px_rgba(20,17,15,0.08)]">
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[#14110f]">
@@ -1289,18 +1402,18 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
               dashboard.subreddits.map((subreddit) => (
                 <div
                   key={subreddit.name}
-                  className="rounded-3xl border border-black/8 bg-[#fffaf0] p-4"
+                  className="min-w-0 rounded-3xl border border-black/8 bg-[#fffaf0] p-4"
                 >
                   <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h3 className="text-lg font-semibold text-[#14110f]">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="break-words text-lg font-semibold text-[#14110f]">
                         r/{subreddit.name}
                       </h3>
                       <p className="mt-1 font-mono text-xs uppercase tracking-[0.2em] text-[#8b8278]">
                         {subreddit.promoTag}
                       </p>
                     </div>
-                    <div className="text-right text-sm text-[#5b524a]">
+                    <div className="shrink-0 text-right text-sm text-[#5b524a]">
                       <div>{subreddit.mentions} threads</div>
                       <div>{subreddit.engagementScore} engagement</div>
                     </div>
@@ -1327,7 +1440,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
           </div>
         </div>
 
-        <div className="rounded-[28px] border border-black/10 bg-white/90 p-6 shadow-[0_16px_40px_rgba(20,17,15,0.08)]">
+        <div className="min-w-0 rounded-[28px] border border-black/10 bg-white/90 p-6 shadow-[0_16px_40px_rgba(20,17,15,0.08)]">
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[#14110f]">
@@ -1400,11 +1513,11 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                   return (
                     <article
                       key={opportunity.id}
-                      className="rounded-3xl border border-black/8 bg-[#fffaf0] p-5"
+                      className="min-w-0 overflow-hidden rounded-3xl border border-black/8 bg-[#fffaf0] p-5"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full border border-black/10 bg-white px-3 py-1 font-mono text-xs uppercase tracking-[0.2em] text-[#6f675f]">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <span className="max-w-full break-words rounded-full border border-black/10 bg-white px-3 py-1 font-mono text-xs uppercase tracking-[0.2em] text-[#6f675f]">
                             {opportunity.keyword}
                           </span>
                           <span className="rounded-full border border-black/10 px-3 py-1 text-xs text-[#5b524a]">
@@ -1415,7 +1528,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-2 text-xs text-[#5b524a]">
+                        <div className="shrink-0 flex items-center gap-2 text-xs text-[#5b524a]">
                           <span>Intent {opportunity.intentScore}</span>
                           <span>Risk {opportunity.riskScore}</span>
                           <span>{opportunity.commentsCount} comments</span>
@@ -1423,12 +1536,12 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                       </div>
 
                       <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
-                        <h3 className="text-xl font-semibold tracking-[-0.03em] text-[#14110f]">
+                        <h3 className="min-w-0 flex-1 break-words text-xl font-semibold tracking-[-0.03em] text-[#14110f]">
                           <a
                             href={opportunity.permalink}
                             target="_blank"
                             rel="noreferrer"
-                            className="hover:text-[#155e63]"
+                            className="block break-words hover:text-[#155e63]"
                           >
                             {opportunity.title}
                           </a>
@@ -1442,7 +1555,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                           Open on Reddit
                         </a>
                       </div>
-                      <p className="mt-3 text-sm leading-6 text-[#4f4740]">
+                      <p className="mt-3 break-words text-sm leading-6 text-[#4f4740]">
                         {opportunity.excerpt ||
                           "No post body was returned for this thread."}
                       </p>

@@ -13,5 +13,10 @@ export default async function DashboardPage({
   const params = await searchParams;
   const dashboard = await getDashboardState(params.project || null);
 
-  return <OpportunityWorkbench initialState={dashboard} />;
+  return (
+    <OpportunityWorkbench
+      key={dashboard.currentProjectId || "empty-project"}
+      initialState={dashboard}
+    />
+  );
 }
