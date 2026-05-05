@@ -11,6 +11,16 @@ type ReplyInput = {
   excerpt: string;
 };
 
+type CommentReplyInput = {
+  productName: string;
+  productDescription: string;
+  subreddit: string;
+  postTitle: string;
+  postBody: string;
+  commentAuthor: string;
+  commentBody: string;
+};
+
 type PostDraftInput = {
   productName: string;
   productDescription: string;
@@ -98,6 +108,10 @@ function buildFallbackReply(input: ReplyInput) {
   return `${firstSentence} ${secondSentence} ${finalSentence}`;
 }
 
+function buildFallbackCommentReply(input: CommentReplyInput) {
+  return `Thanks for the thoughtful comment. My quick take is that ${input.productDescription.toLowerCase()} works best when the workflow stays simple first and the manual steps are clear before adding more tooling. We are building ${input.productName}, but the useful part here is usually defining one repeatable process and tightening that before anything else. If helpful, what part of this has been the hardest to do consistently on your side?`;
+}
+
 function buildFallbackPost(input: PostDraftInput) {
   const title = `What finally improved this workflow for our team`;
   const body = `We kept seeing the same pain point come up around ${input.productDescription.toLowerCase()}.
@@ -160,6 +174,49 @@ export async function generateReplySuggestion(input: ReplyInput) {
         {
           role: "user",
           content: `Subreddit: r/${input.subreddit}\nThread title: ${input.title}\nThread excerpt: ${input.excerpt}\nProduct: ${input.productName}\nProduct description: ${input.productDescription}\n\nWrite a 3-4 sentence reply that helps first and mentions the product only if it feels natural. Use only normal hyphens "-" for punctuation, never em dashes or en dashes.`,
+        },
+      ],
+    });
+
+    const reply = normalizeDashes(response.output_text?.trim() || fallbackReply);
+
+    return {
+      reply,
+      softPromotionScore: computeSoftPromotionScore(reply),
+      source: "ai" as const,
+    };
+  } catch {
+    return {
+      reply: fallbackReply,
+      softPromotionScore: computeSoftPromotionScore(fallbackReply),
+      source: "template" as const,
+    };
+  }
+}
+
+export async function generateCommentReplySuggestion(input: CommentReplyInput) {
+  const fallbackReply = buildFallbackCommentReply(input);
+
+  if (!openai) {
+    return {
+      reply: fallbackReply,
+      softPromotionScore: computeSoftPromotionScore(fallbackReply),
+      source: "template" as const,
+    };
+  }
+
+  try {
+    const response = await openai.responses.create({
+      model: openAiModel,
+      input: [
+        {
+          role: "system",
+          content:
+            "You write concise Reddit replies for founders responding to comments on their own posts. Be specific, respectful, non-defensive, useful, keep self-promotion minimal, and never use em dashes or en dashes - use a normal hyphen instead.",
+        },
+        {
+          role: "user",
+          content: `Subreddit: r/${input.subreddit}\nOriginal post title: ${input.postTitle}\nOriginal post body: ${input.postBody}\nComment author: u/${input.commentAuthor}\nComment text: ${input.commentBody}\nProduct: ${input.productName}\nProduct description: ${input.productDescription}\n\nWrite a 3-4 sentence reply to this specific comment. Acknowledge the comment directly, answer the point clearly, and mention the product only if it feels natural after the value is already clear. Use only normal hyphens "-" for punctuation, never em dashes or en dashes.`,
         },
       ],
     });

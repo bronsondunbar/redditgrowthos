@@ -22,6 +22,8 @@ type RedditListing = {
         created_utc?: number;
         removed_by_category?: string | null;
         banned_by?: string | null;
+        body?: string;
+        replies?: RedditListing | string;
       };
     }>;
   };
@@ -35,6 +37,14 @@ type RedditRulesPayload = {
     description?: string;
     violation_reason?: string;
   }>;
+};
+
+type RedditCommentReplyContext = {
+  subreddit: string;
+  postTitle: string;
+  postBody: string;
+  commentAuthor: string;
+  commentBody: string;
 };
 
 const redditHeaders = {
@@ -368,6 +378,51 @@ function normalizeRedditThreadUrl(input: string) {
   return url;
 }
 
+function normalizeRedditCommentUrl(input: string) {
+  const url = normalizeRedditThreadUrl(input);
+
+  if (!/\/comments\/[^/]+\/[^/]+\/[^/]+/i.test(url.pathname)) {
+    throw new Error("URL must point to a specific Reddit comment.");
+  }
+
+  return url;
+}
+
+function findCommentById(
+  listing: RedditListing | undefined,
+  commentId: string,
+): {
+  author: string;
+  body: string;
+} | null {
+  const children = listing?.data?.children ?? [];
+
+  for (const child of children) {
+    const data = child.data;
+
+    if (!data?.id) {
+      continue;
+    }
+
+    if (data.id === commentId) {
+      return {
+        author: data.author || "unknown",
+        body: data.body?.trim() || "",
+      };
+    }
+
+    if (data.replies && typeof data.replies !== "string") {
+      const nested = findCommentById(data.replies, commentId);
+
+      if (nested) {
+        return nested;
+      }
+    }
+  }
+
+  return null;
+}
+
 export async function fetchTrackedRedditPost(
   inputUrl: string,
 ): Promise<TrackedPostCard> {
@@ -404,6 +459,57 @@ export async function fetchTrackedRedditPost(
       (thread.created_utc || Math.floor(Date.now() / 1000)) * 1000,
     ).toISOString(),
     lastSyncedAt: new Date().toISOString(),
+  };
+}
+
+export async function fetchRedditCommentReplyContext(
+  postUrlInput: string,
+  commentUrlInput: string,
+): Promise<RedditCommentReplyContext> {
+  const postUrl = normalizeRedditThreadUrl(postUrlInput);
+  const commentUrl = normalizeRedditCommentUrl(commentUrlInput);
+  const postApiUrl = new URL(postUrl.toString());
+  postApiUrl.pathname = `${postApiUrl.pathname.replace(/\/$/, "")}.json`;
+
+  const response = await fetch(postApiUrl, {
+    headers: redditHeaders,
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error("Could not load that Reddit post.");
+  }
+
+  const payload = (await response.json()) as RedditThreadPayload;
+  const thread = payload[0]?.data?.children?.[0]?.data;
+
+  if (!thread?.title || !thread.subreddit) {
+    throw new Error("Could not parse that Reddit post.");
+  }
+
+  const commentId =
+    commentUrl.pathname
+      .replace(/\/$/, "")
+      .split("/")
+      .filter(Boolean)
+      .at(-1) || "";
+
+  if (!commentId) {
+    throw new Error("Could not read that Reddit comment URL.");
+  }
+
+  const comment = findCommentById(payload[1] as RedditListing | undefined, commentId);
+
+  if (!comment?.body) {
+    throw new Error("Could not find that comment in the Reddit thread.");
+  }
+
+  return {
+    subreddit: thread.subreddit,
+    postTitle: thread.title,
+    postBody: (thread.selftext || "").trim(),
+    commentAuthor: comment.author,
+    commentBody: comment.body,
   };
 }
 

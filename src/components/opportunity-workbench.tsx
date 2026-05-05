@@ -78,6 +78,20 @@ type PostDraftPanelState = {
   updatedAt?: string;
 };
 
+type CommentReplyComposerState = {
+  postUrl: string;
+  commentUrl: string;
+};
+
+type GeneratedCommentReplyState = {
+  reply: string;
+  softPromotionScore: number;
+  subreddit: string;
+  postTitle: string;
+  commentAuthor: string;
+  commentBody: string;
+};
+
 function getDefaultOpportunityFilter(opportunities: OpportunityCard[]) {
   return opportunities.some(
     (opportunity) =>
@@ -193,10 +207,6 @@ function buildFaviconUrl(websiteUrl: string) {
   }
 }
 
-function buildSubredditPath(subreddit: string) {
-  return `https://www.reddit.com/r/${subreddit}/`;
-}
-
 function buildSubredditSubmitPath(subreddit: string) {
   return `https://www.reddit.com/r/${subreddit}/submit`;
 }
@@ -220,6 +230,13 @@ function upsertTrackedPostList(
         new Date(right.postedAt).getTime() - new Date(left.postedAt).getTime(),
     )
     .slice(0, 12);
+}
+
+function buildEmptyCommentReplyComposer(): CommentReplyComposerState {
+  return {
+    postUrl: "",
+    commentUrl: "",
+  };
 }
 
 export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
@@ -264,6 +281,12 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
   const [deletingPostDraftId, setDeletingPostDraftId] = useState<string | null>(
     null,
   );
+  const [commentReplyComposer, setCommentReplyComposer] =
+    useState<CommentReplyComposerState>(buildEmptyCommentReplyComposer);
+  const [isGeneratingCommentReply, setIsGeneratingCommentReply] =
+    useState(false);
+  const [generatedCommentReply, setGeneratedCommentReply] =
+    useState<GeneratedCommentReplyState | null>(null);
   const [opportunityFilter, setOpportunityFilter] = useState<OpportunityFilter>(
     getDefaultOpportunityFilter(initialState.opportunities),
   );
@@ -303,6 +326,27 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
       ),
     }),
     [dashboard.trackedPosts],
+  );
+  const opportunityCounts = useMemo(
+    () => ({
+      high: dashboard.opportunities.filter(
+        (opportunity) =>
+          opportunity.status !== "DISMISSED" && opportunity.intentScore >= 70,
+      ).length,
+      low: dashboard.opportunities.filter(
+        (opportunity) =>
+          opportunity.status !== "DISMISSED" && opportunity.intentScore < 70,
+      ).length,
+      notReplied: dashboard.opportunities.filter(
+        (opportunity) =>
+          opportunity.status !== "DISMISSED" &&
+          opportunity.status !== "REPLIED",
+      ).length,
+      replied: dashboard.opportunities.filter(
+        (opportunity) => opportunity.status === "REPLIED",
+      ).length,
+    }),
+    [dashboard.opportunities],
   );
   const visibleOpportunities = dashboard.opportunities.filter((opportunity) => {
     if (opportunity.status === "DISMISSED") {
@@ -892,6 +936,66 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
     });
   }
 
+  async function handleGenerateCommentReply(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (
+      !commentReplyComposer.postUrl.trim() ||
+      !commentReplyComposer.commentUrl.trim()
+    ) {
+      setError("Paste both the Reddit post URL and the comment URL.");
+      return;
+    }
+
+    setError(null);
+    setNotice(null);
+    setIsGeneratingCommentReply(true);
+
+    const response = await fetch("/api/reply", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        productName: form.productName,
+        productDescription: form.productDescription,
+        postUrl: commentReplyComposer.postUrl,
+        commentUrl: commentReplyComposer.commentUrl,
+      }),
+    });
+
+    const payload = (await response.json()) as {
+      reply?: string;
+      softPromotionScore?: number;
+      context?: {
+        subreddit?: string;
+        postTitle?: string;
+        commentAuthor?: string;
+        commentBody?: string;
+      };
+      error?: string;
+    };
+
+    setIsGeneratingCommentReply(false);
+
+    if (!response.ok || !payload.reply || !payload.context) {
+      setError(payload.error || "Could not generate a reply for that comment.");
+      return;
+    }
+
+    setGeneratedCommentReply({
+      reply: payload.reply,
+      softPromotionScore: payload.softPromotionScore ?? 0,
+      subreddit: payload.context.subreddit || "unknown",
+      postTitle: payload.context.postTitle || "Untitled post",
+      commentAuthor: payload.context.commentAuthor || "unknown",
+      commentBody: payload.context.commentBody || "",
+    });
+    setNotice("Comment reply draft generated.");
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 py-10 lg:px-10">
       <section className="grid gap-6">
@@ -1101,8 +1205,6 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
         <div className="mt-6 flex gap-3 overflow-x-auto pb-2">
           {hasActions ? (
             dashboard.actions.map((action) => {
-              const subredditUrl =
-                action.subredditUrl || buildSubredditPath(action.subreddit);
               const submitUrl =
                 action.submitUrl || buildSubredditSubmitPath(action.subreddit);
               const linkedOpportunity = action.opportunityId
@@ -1205,14 +1307,6 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                           className="rounded-full bg-white px-4 py-2 text-sm font-semibold !text-[#123b40] shadow-[0_1px_0_rgba(20,17,15,0.06)] transition hover:bg-[#eef8f8]"
                         >
                           Create post
-                        </a>
-                        <a
-                          href={subredditUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-full border border-white/18 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
-                        >
-                          Review subreddit
                         </a>
                         {postDrafts[action.id] ? (
                           <button
@@ -1351,6 +1445,129 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
               project even if the action card changes later.
             </div>
           )}
+        </div>
+      </section>
+
+      <section className="rounded-[28px] border border-black/10 bg-white/90 p-6 shadow-[0_16px_40px_rgba(20,17,15,0.08)]">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[#14110f]">
+              Comment Reply Helper
+            </h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5b524a]">
+              Paste a Reddit post URL and comment URL to draft a reply using
+              the actual thread context.
+            </p>
+          </div>
+          {currentProject ? (
+            <span className="rounded-full border border-black/10 bg-[#fffaf0] px-4 py-2 text-sm text-[#5b524a]">
+              For {currentProject.name}
+            </span>
+          ) : null}
+        </div>
+
+        <div className="mt-6 rounded-[24px] border border-black/8 bg-[#fffaf0] p-5 shadow-[0_16px_40px_rgba(20,17,15,0.04)]">
+          <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#8b8278]">
+            Draft from a live comment
+          </p>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5b524a]">
+            Paste the Reddit post URL and the specific comment URL, then draft
+            a reply using the actual post and comment context.
+          </p>
+
+          <form
+            onSubmit={handleGenerateCommentReply}
+            className="mt-5 grid gap-4"
+          >
+            <label className="grid gap-2 text-sm font-medium text-[#2f2a26]">
+              Post URL
+              <input
+                value={commentReplyComposer.postUrl}
+                onChange={(event) =>
+                  setCommentReplyComposer((current) => ({
+                    ...current,
+                    postUrl: event.target.value,
+                  }))
+                }
+                className="rounded-2xl border border-black/10 bg-white px-4 py-3 outline-none transition focus:border-[#d95d39]"
+                placeholder="https://www.reddit.com/r/subreddit/comments/..."
+              />
+            </label>
+
+            <label className="grid gap-2 text-sm font-medium text-[#2f2a26]">
+              Comment URL
+              <input
+                value={commentReplyComposer.commentUrl}
+                onChange={(event) =>
+                  setCommentReplyComposer((current) => ({
+                    ...current,
+                    commentUrl: event.target.value,
+                  }))
+                }
+                className="rounded-2xl border border-black/10 bg-white px-4 py-3 outline-none transition focus:border-[#d95d39]"
+                placeholder="https://www.reddit.com/r/subreddit/comments/.../comment_id/"
+              />
+            </label>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="submit"
+                disabled={isGeneratingCommentReply}
+                className="rounded-full bg-[#14110f] px-5 py-3 text-sm font-semibold text-[#fffaf0] transition hover:bg-[#2c2622] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isGeneratingCommentReply
+                  ? "Drafting..."
+                  : "Draft reply to comment"}
+              </button>
+              {generatedCommentReply ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    copyDraftToClipboard(
+                      "generated-comment-reply",
+                      generatedCommentReply.reply,
+                      "Comment reply",
+                    )
+                  }
+                  className="rounded-full border border-black/10 px-5 py-3 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                >
+                  {copiedDraftKey === "generated-comment-reply"
+                    ? "Copied"
+                    : "Copy reply"}
+                </button>
+              ) : null}
+            </div>
+          </form>
+
+          {generatedCommentReply ? (
+            <div className="mt-5 rounded-[24px] border border-[#155e63]/18 bg-[#155e63]/6 p-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-[#155e63]/20 bg-white/70 px-3 py-1 text-xs text-[#155e63]">
+                  r/{generatedCommentReply.subreddit}
+                </span>
+                <span className="rounded-full border border-[#155e63]/20 bg-white/70 px-3 py-1 text-xs text-[#155e63]">
+                  Soft-promo score {generatedCommentReply.softPromotionScore}
+                </span>
+              </div>
+              <p className="mt-4 text-sm font-semibold text-[#14110f]">
+                {generatedCommentReply.postTitle}
+              </p>
+              <p className="mt-3 text-sm leading-6 text-[#1f3133]">
+                Comment from u/{generatedCommentReply.commentAuthor}
+              </p>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#4f4740]">
+                {generatedCommentReply.commentBody}
+              </p>
+              <div className="mt-4 rounded-[20px] border border-white/50 bg-white/70 p-4">
+                <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#155e63]">
+                  Drafted reply
+                </p>
+                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#1f3133]">
+                  {generatedCommentReply.reply}
+                </p>
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -1557,7 +1774,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                   : "border border-black/10 text-[#14110f] hover:bg-black/5"
               }`}
             >
-              High
+              High ({opportunityCounts.high})
             </button>
             <button
               type="button"
@@ -1568,7 +1785,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                   : "border border-black/10 text-[#14110f] hover:bg-black/5"
               }`}
             >
-              Low
+              Low ({opportunityCounts.low})
             </button>
             <span className="ml-2 text-sm font-medium text-[#5b524a]">
               Reply:
@@ -1582,7 +1799,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                   : "border border-black/10 text-[#14110f] hover:bg-black/5"
               }`}
             >
-              Not replied
+              Not replied ({opportunityCounts.notReplied})
             </button>
             <button
               type="button"
@@ -1593,7 +1810,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                   : "border border-black/10 text-[#14110f] hover:bg-black/5"
               }`}
             >
-              Replied
+              Replied ({opportunityCounts.replied})
             </button>
           </div>
 

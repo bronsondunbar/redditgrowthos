@@ -3,10 +3,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { isClerkConfigured, isDatabaseConfigured } from "@/lib/config";
-import { generateReplySuggestion } from "@/lib/ai";
+import {
+  generateCommentReplySuggestion,
+  generateReplySuggestion,
+} from "@/lib/ai";
+import { fetchRedditCommentReplyContext } from "@/lib/reddit";
 import { saveReplyDraft } from "@/lib/store";
 
-const replySchema = z.object({
+const opportunityReplySchema = z.object({
   opportunityId: z.string().trim().cuid().nullable().optional(),
   productName: z.string().trim().min(2).max(80),
   productDescription: z.string().trim().min(12).max(500),
@@ -15,10 +19,36 @@ const replySchema = z.object({
   excerpt: z.string().trim().min(1).max(4000),
 });
 
+const commentReplySchema = z.object({
+  productName: z.string().trim().min(2).max(80),
+  productDescription: z.string().trim().min(12).max(500),
+  postUrl: z.string().trim().url(),
+  commentUrl: z.string().trim().url(),
+});
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const payload = replySchema.parse(body);
+
+    if ("postUrl" in body && "commentUrl" in body) {
+      const payload = commentReplySchema.parse(body);
+      const context = await fetchRedditCommentReplyContext(
+        payload.postUrl,
+        payload.commentUrl,
+      );
+      const result = await generateCommentReplySuggestion({
+        productName: payload.productName,
+        productDescription: payload.productDescription,
+        ...context,
+      });
+
+      return NextResponse.json({
+        ...result,
+        context,
+      });
+    }
+
+    const payload = opportunityReplySchema.parse(body);
     const result = await generateReplySuggestion(payload);
 
     if (isClerkConfigured && isDatabaseConfigured && payload.opportunityId) {
@@ -46,7 +76,10 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      { error: "Could not generate a reply." },
+      {
+        error:
+          error instanceof Error ? error.message : "Could not generate a reply.",
+      },
       { status: 500 },
     );
   }
