@@ -58,6 +58,10 @@ function stripCodeFence(value: string) {
     .trim();
 }
 
+function normalizeDashes(value: string) {
+  return value.replace(/[\u2013\u2014]/g, "-");
+}
+
 function normalizeKeywordList(values: string[]) {
   return values
     .map((value) => value.trim())
@@ -151,16 +155,16 @@ export async function generateReplySuggestion(input: ReplyInput) {
         {
           role: "system",
           content:
-            "You write concise Reddit replies for founders. Lead with useful advice, avoid hype, and keep self-promotion minimal.",
+            "You write concise Reddit replies for founders. Lead with useful advice, avoid hype, keep self-promotion minimal, and never use em dashes or en dashes - use a normal hyphen instead.",
         },
         {
           role: "user",
-          content: `Subreddit: r/${input.subreddit}\nThread title: ${input.title}\nThread excerpt: ${input.excerpt}\nProduct: ${input.productName}\nProduct description: ${input.productDescription}\n\nWrite a 3-4 sentence reply that helps first and mentions the product only if it feels natural.`,
+          content: `Subreddit: r/${input.subreddit}\nThread title: ${input.title}\nThread excerpt: ${input.excerpt}\nProduct: ${input.productName}\nProduct description: ${input.productDescription}\n\nWrite a 3-4 sentence reply that helps first and mentions the product only if it feels natural. Use only normal hyphens "-" for punctuation, never em dashes or en dashes.`,
         },
       ],
     });
 
-    const reply = response.output_text?.trim() || fallbackReply;
+    const reply = normalizeDashes(response.output_text?.trim() || fallbackReply);
 
     return {
       reply,
@@ -193,11 +197,11 @@ export async function generatePostSuggestion(input: PostDraftInput) {
         {
           role: "system",
           content:
-            "You write subreddit-native Reddit posts for founders. Avoid sounding promotional. Return only valid JSON.",
+            "You write subreddit-native Reddit posts for founders. Avoid sounding promotional, never use em dashes or en dashes, and return only valid JSON.",
         },
         {
           role: "user",
-          content: `Return JSON with keys title and body.\n\nRules:\n- Write a post that feels native to r/${input.subreddit}.\n- Lead with a concrete lesson, story, or question.\n- Do not include links.\n- Do not mention the product name unless it is necessary, and if used keep it minimal.\n- Body should be 4-7 short paragraphs.\n- Keep the tone useful, candid, and discussion-oriented.\n\nProduct: ${input.productName}\nProduct description: ${input.productDescription}\nAction summary: ${input.summary}\nRisk note: ${input.riskNote}`,
+          content: `Return JSON with keys title and body.\n\nRules:\n- Write a post that feels native to r/${input.subreddit}.\n- Lead with a concrete lesson, story, or question.\n- Do not include links.\n- Do not mention the product name unless it is necessary, and if used keep it minimal.\n- Body should be 4-7 short paragraphs.\n- Keep the tone useful, candid, and discussion-oriented.\n- Use only normal hyphens "-" for punctuation, never em dashes or en dashes.\n\nProduct: ${input.productName}\nProduct description: ${input.productDescription}\nAction summary: ${input.summary}\nRisk note: ${input.riskNote}`,
         },
       ],
     });
@@ -215,8 +219,8 @@ export async function generatePostSuggestion(input: PostDraftInput) {
     }
 
     return {
-      title: parsed.title.trim(),
-      body: parsed.body.trim(),
+      title: normalizeDashes(parsed.title.trim()),
+      body: normalizeDashes(parsed.body.trim()),
       source: "ai" as const,
     };
   } catch {

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { isClerkConfigured, isDatabaseConfigured } from "@/lib/config";
 import { RedditDiscoveryError } from "@/lib/reddit";
 import {
+  ensureUser,
   persistDiscovery,
   refreshProjectDiscovery,
   runDiscovery,
@@ -113,11 +114,13 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
 
+    const user = await ensureUser(session.userId);
+
     const body = await request.json();
     const payload = refreshDiscoverySchema.parse(body);
     const dashboard = await refreshProjectDiscovery(
       payload.projectId,
-      session.userId,
+      user.id,
     );
 
     if (!dashboard) {

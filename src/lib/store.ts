@@ -80,7 +80,7 @@ function buildEmptyState(
   });
 }
 
-async function ensureUser(clerkId: string) {
+export async function ensureUser(clerkId: string) {
   if (!prisma) {
     throw new Error("Database is not configured.");
   }
@@ -616,6 +616,25 @@ export async function saveTrackedPost(
   return toTrackedPostCard(post);
 }
 
+export async function deleteTrackedPost(
+  trackedPostId: string,
+  clerkId: string,
+) {
+  if (!prisma) {
+    return false;
+  }
+
+  const user = await ensureUser(clerkId);
+  const result = await prisma.trackedPost.deleteMany({
+    where: {
+      id: trackedPostId,
+      userId: user.id,
+    },
+  });
+
+  return result.count > 0;
+}
+
 export async function savePostDraft(
   input: {
     projectId?: string | null;
@@ -675,6 +694,22 @@ export async function savePostDraft(
   });
 
   return toPostDraftCard(postDraft);
+}
+
+export async function deletePostDraft(postDraftId: string, clerkId: string) {
+  if (!prisma) {
+    return false;
+  }
+
+  const user = await ensureUser(clerkId);
+  const result = await prisma.postDraft.deleteMany({
+    where: {
+      id: postDraftId,
+      userId: user.id,
+    },
+  });
+
+  return result.count > 0;
 }
 
 export async function saveReplyDraft(

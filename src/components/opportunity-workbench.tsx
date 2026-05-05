@@ -258,6 +258,12 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
   const [busyTrackedPostId, setBusyTrackedPostId] = useState<string | null>(
     null,
   );
+  const [deletingTrackedPostId, setDeletingTrackedPostId] = useState<
+    string | null
+  >(null);
+  const [deletingPostDraftId, setDeletingPostDraftId] = useState<string | null>(
+    null,
+  );
   const [opportunityFilter, setOpportunityFilter] = useState<OpportunityFilter>(
     getDefaultOpportunityFilter(initialState.opportunities),
   );
@@ -809,6 +815,83 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
     );
   }
 
+  async function handleDeletePostDraft(postDraft: PostDraftCard) {
+    setError(null);
+    setNotice(null);
+    setDeletingPostDraftId(postDraft.id);
+
+    setPostDrafts((current) => {
+      const next = { ...current };
+      delete next[postDraft.actionKey];
+      return next;
+    });
+    setDashboard((current) => ({
+      ...current,
+      postDrafts: current.postDrafts.filter((item) => item.id !== postDraft.id),
+    }));
+
+    if (activePostDraft?.actionKey === postDraft.actionKey) {
+      setActivePostDraft(null);
+    }
+
+    if (!dashboard.configured.clerk || !dashboard.configured.database) {
+      setDeletingPostDraftId(null);
+      setNotice("Post draft removed locally.");
+      return;
+    }
+
+    const response = await fetch(`/api/post-drafts/${postDraft.id}`, {
+      method: "DELETE",
+    });
+
+    setDeletingPostDraftId(null);
+
+    if (!response.ok) {
+      setError("Could not delete that post draft.");
+      router.refresh();
+      return;
+    }
+
+    setNotice("Post draft deleted.");
+    startTransition(() => {
+      router.refresh();
+    });
+  }
+
+  async function handleDeleteTrackedPost(post: TrackedPostCard) {
+    setError(null);
+    setNotice(null);
+    setDeletingTrackedPostId(post.id);
+
+    setDashboard((current) => ({
+      ...current,
+      trackedPosts: current.trackedPosts.filter((item) => item.id !== post.id),
+    }));
+
+    if (!dashboard.configured.clerk || !dashboard.configured.database) {
+      setDeletingTrackedPostId(null);
+      setNotice("Tracked post removed locally.");
+      return;
+    }
+
+    const response = await fetch(`/api/posts/${post.id}`, {
+      method: "DELETE",
+    });
+
+    setDeletingTrackedPostId(null);
+
+    if (!response.ok) {
+      setError("Could not delete that tracked post.");
+      router.refresh();
+      return;
+    }
+
+    setNotice("Tracked post deleted.");
+    startTransition(() => {
+      router.refresh();
+    });
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 py-10 lg:px-10">
       <section className="grid gap-6">
@@ -1240,6 +1323,16 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                     {copiedDraftKey === `saved-post:${postDraft.actionKey}`
                       ? "Copied"
                       : "Copy draft"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePostDraft(postDraft)}
+                    disabled={deletingPostDraftId === postDraft.id}
+                    className="rounded-full border border-black/10 px-3 py-1.5 text-xs font-semibold text-[#14110f] transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {deletingPostDraftId === postDraft.id
+                      ? "Deleting..."
+                      : "Delete draft"}
                   </button>
                   <a
                     href={buildSubredditSubmitPath(postDraft.subreddit)}
@@ -1752,16 +1845,31 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
 
                 <div className="mt-4 flex items-center justify-between gap-3 text-sm text-[#5b524a]">
                   <span>Last sync {formatDateTime(post.lastSyncedAt)}</span>
-                  <button
-                    type="button"
-                    onClick={() => refreshTrackedPost(post)}
-                    disabled={busyTrackedPostId === post.redditId}
-                    className="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {busyTrackedPostId === post.redditId
-                      ? "Refreshing..."
-                      : "Refresh"}
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => refreshTrackedPost(post)}
+                      disabled={
+                        busyTrackedPostId === post.redditId ||
+                        deletingTrackedPostId === post.id
+                      }
+                      className="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {busyTrackedPostId === post.redditId
+                        ? "Refreshing..."
+                        : "Refresh"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTrackedPost(post)}
+                      disabled={deletingTrackedPostId === post.id}
+                      className="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {deletingTrackedPostId === post.id
+                        ? "Deleting..."
+                        : "Delete"}
+                    </button>
+                  </div>
                 </div>
               </article>
             ))
