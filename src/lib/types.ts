@@ -45,6 +45,7 @@ export type ProjectSummary = {
   name: string;
   description: string;
   websiteUrl: string;
+  lastDiscoveryAt: string | null;
   keywordCount: number;
   opportunityCount: number;
   updatedAt: string;

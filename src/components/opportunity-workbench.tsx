@@ -187,11 +187,17 @@ function buildEmptyProjectForm(): ProjectFormState {
   };
 }
 
-function formatUpdatedAt(value: string) {
-  return new Intl.DateTimeFormat("en", {
+function formatLastDiscoveryAt(value: string | null) {
+  if (!value) {
+    return "Discovery not run yet";
+  }
+
+  return `Last discovery ${new Intl.DateTimeFormat("en", {
     month: "short",
     day: "numeric",
-  }).format(new Date(value));
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value))}`;
 }
 
 function formatDateTime(value: string) {
@@ -293,6 +299,8 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
   );
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [isRefreshingDiscovery, setIsRefreshingDiscovery] = useState(false);
+  const [isRefreshingAllDiscovery, setIsRefreshingAllDiscovery] =
+    useState(false);
   const [isAutofilling, setIsAutofilling] = useState(false);
   const [trackedPostUrl, setTrackedPostUrl] = useState("");
   const [isTrackingPost, setIsTrackingPost] = useState(false);
@@ -579,6 +587,58 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
     setReplyDrafts(buildReplyDraftState(payload.dashboard.opportunities));
     setReplyScores(buildReplyScoreState(payload.dashboard.opportunities));
     setNotice("Discovery rerun completed for the current project.");
+    router.refresh();
+  }
+
+  async function handleRefreshAllDiscoveries() {
+    if (!dashboard.projects.length) {
+      setError("Create a project before rerunning discovery.");
+      return;
+    }
+
+    if (!dashboard.configured.clerk || !dashboard.configured.database) {
+      setError("Configure Clerk + Neon before rerunning all project discovery.");
+      return;
+    }
+
+    setError(null);
+    setNotice(null);
+    setIsRefreshingAllDiscovery(true);
+
+    const response = await fetch("/api/opportunities", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        scope: "all",
+        selectedProjectId: dashboard.currentProjectId,
+      }),
+    });
+
+    const payload = (await response.json()) as {
+      dashboard?: DashboardState;
+      error?: string;
+      persisted?: boolean;
+    };
+
+    setIsRefreshingAllDiscovery(false);
+
+    if (!response.ok || !payload.dashboard) {
+      setError(payload.error || "Could not refresh all projects.");
+      return;
+    }
+
+    setDashboard(payload.dashboard);
+    setForm(buildFormState(payload.dashboard));
+    setOpportunityFilter(
+      getDefaultOpportunityFilter(payload.dashboard.opportunities),
+    );
+    setComposerMode(null);
+    setPostDrafts(buildPostDraftState(payload.dashboard.postDrafts));
+    setReplyDrafts(buildReplyDraftState(payload.dashboard.opportunities));
+    setReplyScores(buildReplyScoreState(payload.dashboard.opportunities));
+    setNotice("Discovery rerun completed for all projects.");
     router.refresh();
   }
 
@@ -1287,8 +1347,8 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                         </h3>
                         <p className="mt-1 truncate text-xs text-[#6b6258]">
                           {project.keywordCount} keywords ·{" "}
-                          {project.opportunityCount} opps · Updated{" "}
-                          {formatUpdatedAt(project.updatedAt)}
+                          {project.opportunityCount} opps ·{" "}
+                          {formatLastDiscoveryAt(project.lastDiscoveryAt)}
                         </p>
                       </div>
                       {isCurrent ? (
@@ -1312,6 +1372,16 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
             className="mt-4 w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Edit selected
+          </button>
+          <button
+            type="button"
+            onClick={handleRefreshAllDiscoveries}
+            disabled={!dashboard.projects.length || isRefreshingAllDiscovery}
+            className="mt-2 w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isRefreshingAllDiscovery
+              ? "Refreshing all..."
+              : "Re-run all discovery"}
           </button>
         </aside>
 
@@ -1341,85 +1411,89 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                   {currentProject?.description ||
                     "Create a project to start tracking separate products or client workspaces inside the same account."}
                 </p>
-              </div>
-              <div className="flex max-w-full flex-wrap gap-2 xl:max-w-[48rem] xl:justify-end">
-            {currentProject ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setActiveWorkspaceTool("drafts")}
-                  className="app-button app-button-secondary text-sm"
-                >
-                  Drafts ({dashboard.postDrafts.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveWorkspaceTool("reply")}
-                  className="app-button app-button-secondary text-sm"
-                >
-                  Reply helper
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveWorkspaceTool("comment")}
-                  className="app-button app-button-secondary text-sm"
-                >
-                  Comment helper
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveWorkspaceTool("tracking")}
-                  className="app-button app-button-secondary text-sm"
-                >
-                  Tracked posts ({trackedPostTotals.count})
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDeleteProject}
-                  disabled={isDeletingProject}
-                  className="app-button app-button-secondary border-[#b9381d]/30 text-[#b9381d] hover:border-[#b9381d]/50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isDeletingProject ? "Deleting..." : "Delete project"}
-                </button>
-              </>
-            ) : null}
-            {currentProject?.websiteUrl ? (
-              <>
-                {isLocalDevelopment ? (
-                  <button
-                    type="button"
-                    onClick={handleRefreshDiscovery}
-                    disabled={!currentProject || isRefreshingDiscovery}
-                    className="app-button app-button-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {isRefreshingDiscovery
-                      ? "Refreshing..."
-                      : "Re-run discovery"}
-                  </button>
+                {currentProject ? (
+                  <p className="mt-3 text-xs text-[#6b6258]">
+                    {formatLastDiscoveryAt(currentProject.lastDiscoveryAt)}
+                  </p>
                 ) : null}
-                <a
-                  href={currentProject.websiteUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="app-button app-button-secondary text-sm"
-                >
-                  Visit website
-                </a>
-              </>
-            ) : isLocalDevelopment && currentProject ? (
-              <>
-                <button
-                  type="button"
-                  onClick={handleRefreshDiscovery}
-                  disabled={isRefreshingDiscovery}
-                  className="app-button app-button-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isRefreshingDiscovery ? "Refreshing..." : "Re-run discovery"}
-                </button>
-              </>
-            ) : null}
-          </div>
-        </div>
+              </div>
+              {currentProject ? (
+                <div className="flex max-w-full flex-wrap gap-2 xl:max-w-[32rem] xl:justify-end">
+                  <details className="relative">
+                    <summary className="app-button app-button-secondary cursor-pointer list-none text-sm">
+                      Workspace tools
+                    </summary>
+                    <div className="absolute right-0 z-20 mt-2 grid min-w-64 gap-1 rounded-lg border border-black/10 bg-white p-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveWorkspaceTool("drafts")}
+                        className="rounded-md px-3 py-2 text-left text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                      >
+                        Drafts ({dashboard.postDrafts.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveWorkspaceTool("reply")}
+                        className="rounded-md px-3 py-2 text-left text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                      >
+                        Comment Reply Helper
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveWorkspaceTool("comment")}
+                        className="rounded-md px-3 py-2 text-left text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                      >
+                        Post Reply Helper
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveWorkspaceTool("tracking")}
+                        className="rounded-md px-3 py-2 text-left text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                      >
+                        Tracked posts ({trackedPostTotals.count})
+                      </button>
+                    </div>
+                  </details>
+                  <details className="relative">
+                    <summary className="app-button app-button-secondary cursor-pointer list-none text-sm">
+                      Project actions
+                    </summary>
+                    <div className="absolute right-0 z-20 mt-2 grid min-w-56 gap-1 rounded-lg border border-black/10 bg-white p-2">
+                      {isLocalDevelopment ? (
+                        <button
+                          type="button"
+                          onClick={handleRefreshDiscovery}
+                          disabled={isRefreshingDiscovery}
+                          className="rounded-md px-3 py-2 text-left text-sm font-semibold text-[#14110f] transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {isRefreshingDiscovery
+                            ? "Refreshing..."
+                            : "Re-run discovery"}
+                        </button>
+                      ) : null}
+                      {currentProject.websiteUrl ? (
+                        <a
+                          href={currentProject.websiteUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-md px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                        >
+                          Visit website
+                        </a>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={handleDeleteProject}
+                        disabled={isDeletingProject}
+                        className="rounded-md px-3 py-2 text-left text-sm font-semibold text-[#b9381d] transition hover:bg-[#b9381d]/5 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isDeletingProject ? "Deleting..." : "Delete project"}
+                      </button>
+                    </div>
+                  </details>
+                </div>
+              ) : null}
+            </div>
 
         {currentProject ? (
           <div className="mt-4 grid gap-2 border-t border-black/10 pt-4 sm:grid-cols-5">
@@ -1504,16 +1578,6 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                     <div className="mt-auto flex flex-wrap gap-2 pt-4">
                       {action.type === "COMMENT" ? (
                         <>
-                          {action.permalink ? (
-                            <a
-                              href={action.permalink}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
-                            >
-                              Open thread
-                            </a>
-                          ) : null}
                           <button
                             type="button"
                             onClick={() =>
@@ -1529,34 +1593,61 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                               ? "Drafting..."
                               : "Draft reply"}
                           </button>
-                          {action.opportunityId ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateWorkflow(
-                                    action.opportunityId!,
-                                    isSaved ? "NEW" : "SAVED",
-                                  )
-                                }
-                                className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
-                              >
-                                {isSaved ? "Unsave thread" : "Save thread"}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateWorkflow(
-                                    action.opportunityId!,
-                                    "REPLIED",
-                                  )
-                                }
-                                className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
-                              >
-                                Mark replied
-                              </button>
-                            </>
-                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => completeTodayAction(action)}
+                            disabled={completingActionId === action.id}
+                            className="rounded-md border border-[#155e63]/25 px-3 py-2 text-sm font-semibold text-[#155e63] transition hover:bg-[#edf6f6] disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {completingActionId === action.id
+                              ? "Completing..."
+                              : "Complete"}
+                          </button>
+                          <details className="relative">
+                            <summary className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5 cursor-pointer list-none">
+                              More
+                            </summary>
+                            <div className="absolute bottom-full left-0 z-20 mb-2 grid min-w-44 gap-1 rounded-lg border border-black/10 bg-white p-2">
+                              {action.permalink ? (
+                                <a
+                                  href={action.permalink}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="rounded-md px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                                >
+                                  Open thread
+                                </a>
+                              ) : null}
+                              {action.opportunityId ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      updateWorkflow(
+                                        action.opportunityId!,
+                                        isSaved ? "NEW" : "SAVED",
+                                      )
+                                    }
+                                    className="rounded-md px-3 py-2 text-left text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                                  >
+                                    {isSaved ? "Unsave thread" : "Save thread"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      updateWorkflow(
+                                        action.opportunityId!,
+                                        "REPLIED",
+                                      )
+                                    }
+                                    className="rounded-md px-3 py-2 text-left text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                                  >
+                                    Mark replied
+                                  </button>
+                                </>
+                              ) : null}
+                            </div>
+                          </details>
                         </>
                       ) : (
                         <>
@@ -1577,44 +1668,51 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                               ? "Drafting..."
                               : "Draft post"}
                           </button>
-                          <a
-                            href={submitUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                          <button
+                            type="button"
+                            onClick={() => completeTodayAction(action)}
+                            disabled={completingActionId === action.id}
+                            className="rounded-md border border-[#155e63]/25 px-3 py-2 text-sm font-semibold text-[#155e63] transition hover:bg-[#edf6f6] disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            Create post
-                          </a>
-                          {postDrafts[action.id] ? (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                openPostDraftPanel({
-                                  actionKey: action.id,
-                                  subreddit: action.subreddit,
-                                  title: postDrafts[action.id].title,
-                                  body: postDrafts[action.id].body,
-                                  rules: postDrafts[action.id].rules,
-                                  review: postDrafts[action.id].review,
-                                })
-                              }
-                              className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
-                            >
-                              View draft
-                            </button>
-                          ) : null}
+                            {completingActionId === action.id
+                              ? "Completing..."
+                              : "Complete"}
+                          </button>
+                          <details className="relative">
+                            <summary className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5 cursor-pointer list-none">
+                              More
+                            </summary>
+                            <div className="absolute bottom-full left-0 z-20 mb-2 grid min-w-40 gap-1 rounded-lg border border-black/10 bg-white p-2">
+                              <a
+                                href={submitUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="rounded-md px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                              >
+                                Create post
+                              </a>
+                              {postDrafts[action.id] ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openPostDraftPanel({
+                                    actionKey: action.id,
+                                    subreddit: action.subreddit,
+                                    title: postDrafts[action.id].title,
+                                    body: postDrafts[action.id].body,
+                                    rules: postDrafts[action.id].rules,
+                                    review: postDrafts[action.id].review,
+                                  })
+                                }
+                                className="rounded-md px-3 py-2 text-left text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                              >
+                                View draft
+                              </button>
+                              ) : null}
+                            </div>
+                          </details>
                         </>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => completeTodayAction(action)}
-                        disabled={completingActionId === action.id}
-                        className="rounded-md border border-[#155e63]/25 px-3 py-2 text-sm font-semibold text-[#155e63] transition hover:bg-[#edf6f6] disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {completingActionId === action.id
-                          ? "Completing..."
-                          : "Complete"}
-                      </button>
                     </div>
                     {action.type === "COMMENT" &&
                     linkedOpportunity &&
@@ -1793,7 +1891,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
             <section className="app-panel p-4">
               <button
                 type="button"
-                aria-label="Close post comment helper"
+                aria-label="Close post reply helper"
                 onClick={() => setActiveWorkspaceTool(null)}
                 className="mb-4 rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
               >
@@ -1802,10 +1900,10 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-semibold text-[#14110f]">
-                    Post Comment Helper
+                    Post Reply Helper
                   </h2>
                   <p className="mt-1 text-sm leading-6 text-[#5b524a]">
-                    Draft a top-level comment for a Reddit post using this
+                    Draft a top-level reply for a Reddit post using this
                     project&apos;s positioning.
                   </p>
                 </div>
@@ -1840,7 +1938,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                     >
                       {isGeneratingPostComment
                         ? "Drafting..."
-                        : "Draft comment"}
+                        : "Draft post reply"}
                     </button>
                     {generatedPostComment ? (
                       <button
@@ -1899,7 +1997,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
           </div>
           <button
             type="button"
-            aria-label="Close post comment helper"
+            aria-label="Close post reply helper"
             onClick={() => setActiveWorkspaceTool(null)}
             className="flex-1"
           />

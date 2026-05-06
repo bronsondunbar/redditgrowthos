@@ -123,6 +123,7 @@ function toProjectSummary(project: {
   name: string;
   description: string | null;
   websiteUrl: string | null;
+  lastDiscoveryAt: Date | null;
   updatedAt: Date;
   _count: {
     trackedKeywords: number;
@@ -134,6 +135,7 @@ function toProjectSummary(project: {
     name: project.name,
     description: project.description || "",
     websiteUrl: project.websiteUrl || "",
+    lastDiscoveryAt: project.lastDiscoveryAt?.toISOString() || null,
     keywordCount: project._count.trackedKeywords,
     opportunityCount: project._count.opportunities,
     updatedAt: project.updatedAt.toISOString(),
@@ -338,6 +340,7 @@ export function buildTransientDashboardState(
         name: payload.productName,
         description: payload.productDescription,
         websiteUrl: payload.websiteUrl || "",
+        lastDiscoveryAt: new Date().toISOString(),
         keywordCount: payload.keywords.length,
         opportunityCount: opportunities.length,
         updatedAt: new Date().toISOString(),
@@ -376,6 +379,8 @@ async function persistProjectDiscovery(input: {
   if (!db) {
     return input.dashboard;
   }
+
+  const discoveryCompletedAt = new Date();
 
   await db.dailyActionCompletion.deleteMany({
     where: {
@@ -461,6 +466,16 @@ async function persistProjectDiscovery(input: {
       }),
     ),
   );
+
+  await db.project.updateMany({
+    where: {
+      id: input.projectId,
+      userId: input.userId,
+    },
+    data: {
+      lastDiscoveryAt: discoveryCompletedAt,
+    },
+  });
 
   return getDashboardStateForUser(input.userId, input.projectId);
 }
@@ -584,6 +599,31 @@ export async function refreshProjectDiscovery(
     payload,
     dashboard,
   });
+}
+
+export async function refreshAllProjectDiscoveries(
+  userId: string,
+  selectedProjectId?: string | null,
+) {
+  if (!prisma) {
+    return null;
+  }
+
+  const projects = await prisma.project.findMany({
+    where: { userId },
+    select: { id: true },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+  });
+
+  if (!projects.length) {
+    return getDashboardStateForUser(userId, selectedProjectId);
+  }
+
+  for (const project of projects) {
+    await refreshProjectDiscovery(project.id, userId);
+  }
+
+  return getDashboardStateForUser(userId, selectedProjectId);
 }
 
 export async function maybeGetClerkUserId() {

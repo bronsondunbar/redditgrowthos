@@ -7,6 +7,7 @@ import { RedditDiscoveryError } from "@/lib/reddit";
 import {
   ensureUser,
   persistDiscovery,
+  refreshAllProjectDiscoveries,
   refreshProjectDiscovery,
   runDiscovery,
 } from "@/lib/store";
@@ -34,6 +35,11 @@ const discoverySchema = z.object({
 
 const refreshDiscoverySchema = z.object({
   projectId: z.string().trim().cuid(),
+});
+
+const refreshAllDiscoverySchema = z.object({
+  scope: z.literal("all"),
+  selectedProjectId: z.string().trim().cuid().nullable().optional(),
 });
 
 export async function POST(request: Request) {
@@ -117,6 +123,24 @@ export async function PATCH(request: Request) {
     const user = await ensureUser(session.userId);
 
     const body = await request.json();
+    const allProjectsPayload = refreshAllDiscoverySchema.safeParse(body);
+
+    if (allProjectsPayload.success) {
+      const dashboard = await refreshAllProjectDiscoveries(
+        user.id,
+        allProjectsPayload.data.selectedProjectId,
+      );
+
+      if (!dashboard) {
+        return NextResponse.json(
+          { error: "Could not refresh discovery right now." },
+          { status: 500 },
+        );
+      }
+
+      return NextResponse.json({ dashboard, persisted: true });
+    }
+
     const payload = refreshDiscoverySchema.parse(body);
     const dashboard = await refreshProjectDiscovery(
       payload.projectId,
