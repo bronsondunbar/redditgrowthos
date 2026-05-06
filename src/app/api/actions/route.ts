@@ -8,6 +8,8 @@ import { completeDailyAction, ensureUser } from "@/lib/store";
 const completeActionSchema = z.object({
   projectId: z.string().trim().cuid(),
   actionId: z.string().trim().min(4).max(160),
+  opportunityId: z.string().trim().cuid().nullable().optional(),
+  opportunityStatus: z.enum(["NEW", "SAVED", "REPLIED", "DISMISSED"]).optional(),
 });
 
 export async function POST(request: Request) {
@@ -32,6 +34,8 @@ export async function POST(request: Request) {
       userId: user.id,
       projectId: payload.projectId,
       actionId: payload.actionId,
+      opportunityId: payload.opportunityId,
+      opportunityStatus: payload.opportunityStatus,
     });
 
     if (!completed) {

@@ -12,6 +12,7 @@ import {
   buildDailyActions,
   buildSubredditSummaries,
   discoverOpportunities,
+  filterProjectRelevantOpportunities,
 } from "@/lib/reddit";
 import type {
   ActionCard,
@@ -55,8 +56,13 @@ function createDashboardState(input: {
   demoMode: boolean;
   requiresAuth: boolean;
 }): DashboardState {
-  const subreddits = buildSubredditSummaries(input.opportunities);
-  const actions = buildDailyActions(input.opportunities, subreddits);
+  const opportunities = filterProjectRelevantOpportunities({
+    productName: input.productName,
+    productDescription: input.productDescription,
+    opportunities: input.opportunities,
+  });
+  const subreddits = buildSubredditSummaries(opportunities);
+  const actions = buildDailyActions(opportunities, subreddits);
 
   return {
     configured: {
@@ -74,10 +80,10 @@ function createDashboardState(input: {
     trackedKeywords: input.trackedKeywords,
     trackedPosts: input.trackedPosts,
     postDrafts: input.postDrafts,
-    analytics: buildAnalytics(input.opportunities, subreddits),
+    analytics: buildAnalytics(opportunities, subreddits),
     actions: filterCompletedActions(actions, input.completedActionIds),
     subreddits,
-    opportunities: input.opportunities,
+    opportunities,
   };
 }
 
@@ -792,6 +798,8 @@ export async function completeDailyAction(input: {
   userId: string;
   projectId: string;
   actionId: string;
+  opportunityId?: string | null;
+  opportunityStatus?: WorkflowStatus;
 }) {
   if (!prisma) {
     return false;
@@ -811,23 +819,46 @@ export async function completeDailyAction(input: {
     return false;
   }
 
-  await prisma.dailyActionCompletion.upsert({
-    where: {
-      projectId_actionId_actionDate: {
+  const actionDate = getDailyActionDate();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.dailyActionCompletion.upsert({
+      where: {
+        projectId_actionId_actionDate: {
+          projectId: project.id,
+          actionId: input.actionId,
+          actionDate,
+        },
+      },
+      update: {
+        completedAt: new Date(),
+      },
+      create: {
+        userId: input.userId,
         projectId: project.id,
         actionId: input.actionId,
-        actionDate: getDailyActionDate(),
+        actionDate,
       },
-    },
-    update: {
-      completedAt: new Date(),
-    },
-    create: {
-      userId: input.userId,
-      projectId: project.id,
-      actionId: input.actionId,
-      actionDate: getDailyActionDate(),
-    },
+    });
+
+    if (!input.opportunityId || !input.opportunityStatus) {
+      return;
+    }
+
+    const opportunityUpdate = await tx.opportunity.updateMany({
+      where: {
+        id: input.opportunityId,
+        userId: input.userId,
+        projectId: project.id,
+      },
+      data: {
+        status: input.opportunityStatus,
+      },
+    });
+
+    if (opportunityUpdate.count === 0) {
+      throw new Error("Linked opportunity not found.");
+    }
   });
 
   return true;

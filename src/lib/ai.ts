@@ -52,7 +52,7 @@ type WebsiteEnrichmentInput = {
   siteName: string;
   description: string;
   metaKeywords: string;
-  bodySnippet: string;
+  pageContext: string;
 };
 
 type WebsiteEnrichmentResult = {
@@ -363,7 +363,7 @@ export async function enrichWebsiteIntake(
         },
         {
           role: "user",
-          content: `Analyze this website and return JSON with keys productName, productDescription, and keywords.\n\nRules:\n- productName: short brand or product name.\n- productDescription: one precise sentence explaining what the product does and who it helps.\n- keywords: 6-8 high-intent Reddit discovery phrases, not single generic nouns. Prefer phrases a buyer or frustrated user would actually type, including pain points, alternatives, comparisons, and outcomes.\n- Avoid branded fluff, marketing slogans, and repeated variants.\n\nWebsite URL: ${input.url}\nTitle: ${input.title}\nSite name: ${input.siteName}\nDescription: ${input.description}\nMeta keywords: ${input.metaKeywords}\nBody snippet: ${input.bodySnippet}`,
+          content: `Analyze this website and return JSON with keys productName, productDescription, and keywords.\n\nRules:\n- productName: short brand or product name.\n- productDescription: one precise sentence explaining what the product does, who it helps, and the practical outcome it creates.\n- keywords: 6-8 high-intent Reddit discovery phrases, not single generic nouns. Prefer phrases a buyer or frustrated user would actually type, including pain points, alternatives, comparisons, workflows, and outcomes.\n- Use evidence across the provided pages. Prefer concrete product capabilities, target audience, and customer pain points over tagline language.\n- Avoid branded fluff, marketing slogans, and repeated variants.\n\nWebsite URL: ${input.url}\nTitle: ${input.title}\nSite name: ${input.siteName}\nDescription: ${input.description}\nMeta keywords: ${input.metaKeywords}\n\nWebsite context:\n${input.pageContext}`,
         },
       ],
     });

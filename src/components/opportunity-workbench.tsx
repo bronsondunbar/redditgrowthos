@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { startTransition, useMemo, useState } from "react";
 
 import type {
+  ActionCard,
   DashboardState,
   OpportunityCard,
   PostDraftCard,
@@ -771,20 +772,33 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
     }));
   }
 
-  async function completeTodayAction(actionId: string) {
-    const previousActions = dashboard.actions;
+  async function completeTodayAction(action: ActionCard) {
+    const previousDashboard = dashboard;
+    const nextOpportunityStatus =
+      action.type === "COMMENT" && action.opportunityId ? "REPLIED" : null;
 
     setError(null);
     setNotice(null);
-    setCompletingActionId(actionId);
+    setCompletingActionId(action.id);
     setDashboard((current) => ({
       ...current,
-      actions: current.actions.filter((action) => action.id !== actionId),
+      actions: current.actions.filter((item) => item.id !== action.id),
+      opportunities: nextOpportunityStatus
+        ? current.opportunities.map((opportunity) =>
+            opportunity.id === action.opportunityId
+              ? { ...opportunity, status: nextOpportunityStatus }
+              : opportunity,
+          )
+        : current.opportunities,
     }));
 
     if (!dashboard.configured.clerk || !dashboard.configured.database) {
       setCompletingActionId(null);
-      setNotice("Action completed locally.");
+      setNotice(
+        nextOpportunityStatus
+          ? "Action completed locally and inbox marked replied."
+          : "Action completed locally.",
+      );
       return;
     }
 
@@ -795,22 +809,25 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
       },
       body: JSON.stringify({
         projectId: dashboard.currentProjectId,
-        actionId,
+        actionId: action.id,
+        opportunityId: action.opportunityId,
+        opportunityStatus: nextOpportunityStatus || undefined,
       }),
     });
 
     setCompletingActionId(null);
 
     if (!response.ok) {
-      setDashboard((current) => ({
-        ...current,
-        actions: previousActions,
-      }));
+      setDashboard(previousDashboard);
       setError("Could not mark that action complete.");
       return;
     }
 
-    setNotice("Action completed for today.");
+    setNotice(
+      nextOpportunityStatus
+        ? "Action completed for today and inbox marked replied."
+        : "Action completed for today.",
+    );
     startTransition(() => {
       router.refresh();
     });
@@ -1264,11 +1281,17 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                 const isSaved = linkedOpportunity
                   ? isSavedStatus(linkedOpportunity.status)
                   : false;
+                const actionReplyDraft = linkedOpportunity
+                  ? replyDrafts[linkedOpportunity.id]
+                  : null;
+                const actionReplyScore = linkedOpportunity
+                  ? (replyScores[linkedOpportunity.id] ?? 0)
+                  : 0;
 
                 return (
                   <div
                     key={action.id}
-                    className="flex min-h-[11rem] w-[20rem] shrink-0 flex-col rounded-lg border border-black/10 bg-white p-4"
+                    className="flex min-h-[11rem] w-[20rem] shrink-0 flex-col rounded-lg border border-black/10 bg-white p-4 sm:w-[28rem]"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -1315,18 +1338,32 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                               : "Draft reply"}
                           </button>
                           {action.opportunityId ? (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updateWorkflow(
-                                  action.opportunityId!,
-                                  isSaved ? "NEW" : "SAVED",
-                                )
-                              }
-                              className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
-                            >
-                              {isSaved ? "Unsave thread" : "Save thread"}
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  updateWorkflow(
+                                    action.opportunityId!,
+                                    isSaved ? "NEW" : "SAVED",
+                                  )
+                                }
+                                className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                              >
+                                {isSaved ? "Unsave thread" : "Save thread"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  updateWorkflow(
+                                    action.opportunityId!,
+                                    "REPLIED",
+                                  )
+                                }
+                                className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                              >
+                                Mark replied
+                              </button>
+                            </>
                           ) : null}
                         </>
                       ) : (
@@ -1378,7 +1415,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                       )}
                       <button
                         type="button"
-                        onClick={() => completeTodayAction(action.id)}
+                        onClick={() => completeTodayAction(action)}
                         disabled={completingActionId === action.id}
                         className="rounded-md border border-[#155e63]/25 px-3 py-2 text-sm font-semibold text-[#155e63] transition hover:bg-[#edf6f6] disabled:cursor-not-allowed disabled:opacity-60"
                       >
@@ -1387,14 +1424,49 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                           : "Complete"}
                       </button>
                     </div>
+                    {action.type === "COMMENT" &&
+                    linkedOpportunity &&
+                    actionReplyDraft ? (
+                      <div className="mt-4 max-h-80 overflow-y-auto rounded-lg border border-[#155e63]/20 bg-[#edf6f6] p-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="font-mono text-xs uppercase tracking-normal text-[#155e63]">
+                              Reply draft
+                            </p>
+                            <p className="mt-1 text-xs text-[#155e63]">
+                              Soft-promo score: {actionReplyScore}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              copyDraftToClipboard(
+                                `action-reply:${linkedOpportunity.id}`,
+                                actionReplyDraft,
+                                "Reply draft",
+                              )
+                            }
+                            className="shrink-0 rounded-md border border-[#155e63]/20 px-2 py-1 text-xs font-semibold text-[#155e63] transition hover:bg-[#155e63]/10"
+                          >
+                            {copiedDraftKey ===
+                            `action-reply:${linkedOpportunity.id}`
+                              ? "Copied"
+                              : "Copy draft"}
+                          </button>
+                        </div>
+                        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#1f3133]">
+                          {actionReplyDraft}
+                        </p>
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}
             </div>
           ) : (
             <div className="w-full rounded-lg border border-black/10 bg-white p-4 text-sm leading-6 text-[#5b524a]">
-              Run your first discovery search to generate a post target and two
-              reply opportunities for today.
+              No strong project-matched actions are available right now. Run
+              discovery again after tuning the project keywords.
             </div>
           )}
         </div>
@@ -1540,6 +1612,10 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
             <h2 className="text-lg font-semibold text-[#14110f]">
               Comment Reply Helper
             </h2>
+            <p className="mt-1 text-sm leading-6 text-[#5b524a]">
+              Draft from a pasted Reddit comment, or review replies started from
+              today&apos;s action cards.
+            </p>
           </div>
           {currentProject ? (
             <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#6b6258]">
@@ -2024,8 +2100,8 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
             ) : (
               <div className="rounded-lg border border-black/10 bg-white p-4 text-sm leading-6 text-[#5b524a]">
                 No {opportunityFilter}-intent {replyStateFilter} opportunities
-                right now. Adjust the filters or run discovery again to refresh
-                the inbox.
+                match this project right now. Adjust the project keywords or run
+                discovery again to refresh the inbox.
               </div>
             )}
           </div>

@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { ArrowRight, Radar } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
+import { BrandMark } from "@/components/brand-mark";
 import { isClerkConfigured } from "@/lib/config";
 
 const outcomes = [
@@ -84,8 +85,8 @@ export default function Home() {
                   One channel. Three clear moves.
                 </h2>
               </div>
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white">
-                <Radar className="h-5 w-5" strokeWidth={2.2} />
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10">
+                <BrandMark className="h-8 w-8" />
               </span>
             </div>
           </div>

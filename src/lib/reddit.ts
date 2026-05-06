@@ -47,6 +47,13 @@ type RedditCommentReplyContext = {
   commentBody: string;
 };
 
+type DiscoverySearchPlan = {
+  query: string;
+  matchedKeyword: string;
+  sort: "new" | "relevance";
+  subreddit?: string;
+};
+
 const redditHeaders = {
   Accept: "application/json",
   "User-Agent": redditUserAgent,
@@ -145,7 +152,17 @@ const relevanceStopWords = new Set([
   "there",
   "they",
   "this",
+  "actually",
+  "build",
+  "building",
+  "business",
+  "customer",
+  "customers",
+  "helps",
+  "product",
+  "teams",
   "tool",
+  "tools",
   "with",
 ]);
 
@@ -274,19 +291,35 @@ function isRemovedListing(item: {
   return title === "[removed]" || body === "[removed]";
 }
 
-export async function searchRedditByKeyword(keyword: string) {
+export async function searchRedditByKeyword(
+  keyword: string,
+  options?: {
+    matchedKeyword?: string;
+    sort?: "new" | "relevance";
+    subreddit?: string;
+  },
+) {
   const accessToken = await getRedditAccessToken();
+  const subreddit = options?.subreddit?.replace(/^r\//i, "").trim();
   const url = new URL(
     accessToken
-      ? "https://oauth.reddit.com/search"
-      : "https://www.reddit.com/search.json",
+      ? subreddit
+        ? `https://oauth.reddit.com/r/${encodeURIComponent(subreddit)}/search`
+        : "https://oauth.reddit.com/search"
+      : subreddit
+        ? `https://www.reddit.com/r/${encodeURIComponent(subreddit)}/search.json`
+        : "https://www.reddit.com/search.json",
   );
   url.searchParams.set("q", keyword);
-  url.searchParams.set("sort", "new");
-  url.searchParams.set("limit", "10");
+  url.searchParams.set("sort", options?.sort || "relevance");
+  url.searchParams.set("limit", "15");
   url.searchParams.set("t", "week");
   url.searchParams.set("type", "link");
   url.searchParams.set("raw_json", "1");
+
+  if (subreddit) {
+    url.searchParams.set("restrict_sr", "1");
+  }
 
   const response = await fetch(url, {
     headers: accessToken
@@ -303,7 +336,7 @@ export async function searchRedditByKeyword(keyword: string) {
     const responseSnippet = responseText.slice(0, 180);
 
     throw new Error(
-      `Reddit search failed for keyword \"${keyword}\" with ${response.status} ${response.statusText}${responseSnippet ? `: ${responseSnippet}` : ""}`,
+      `Reddit search failed for keyword \"${keyword}\"${subreddit ? ` in r/${subreddit}` : ""} with ${response.status} ${response.statusText}${responseSnippet ? `: ${responseSnippet}` : ""}`,
     );
   }
 
@@ -332,7 +365,7 @@ export async function searchRedditByKeyword(keyword: string) {
 
       return {
         id: item.id || crypto.randomUUID(),
-        keyword,
+        keyword: options?.matchedKeyword || keyword,
         title: item.title || "Untitled thread",
         excerpt,
         subreddit: item.subreddit || "unknown",
@@ -538,33 +571,143 @@ export async function fetchSubredditRules(subreddit: string) {
     .slice(0, 12);
 }
 
-function expandDiscoveryQueries(keywords: string[]) {
-  const queries: string[] = [];
+function getProjectPhrases(input: {
+  productName: string;
+  productDescription: string;
+}) {
+  const tokens = tokenize(`${input.productName} ${input.productDescription}`);
+  const phrases = new Set<string>();
 
-  for (const keyword of keywords) {
+  for (let index = 0; index < tokens.length - 1; index += 1) {
+    const first = tokens[index];
+    const second = tokens[index + 1];
+
+    if (!first || !second) {
+      continue;
+    }
+
+    phrases.add(`${first} ${second}`);
+  }
+
+  for (const token of tokens) {
+    if (token.length >= 6) {
+      phrases.add(token);
+    }
+  }
+
+  return Array.from(phrases).slice(0, 6);
+}
+
+function expandDiscoveryQueries(input: {
+  keywords: string[];
+  productName: string;
+  productDescription: string;
+}) {
+  const plans: DiscoverySearchPlan[] = [];
+  const projectPhrases = getProjectPhrases(input);
+
+  function addPlan(plan: DiscoverySearchPlan) {
+    const normalizedKey = [
+      plan.subreddit || "",
+      plan.sort,
+      plan.query.toLowerCase(),
+    ].join(":");
+
+    if (
+      plans.some(
+        (existing) =>
+          [
+            existing.subreddit || "",
+            existing.sort,
+            existing.query.toLowerCase(),
+          ].join(":") === normalizedKey,
+      )
+    ) {
+      return;
+    }
+
+    plans.push(plan);
+  }
+
+  for (const keyword of input.keywords) {
     const trimmed = keyword.trim();
 
     if (!trimmed) {
       continue;
     }
 
-    queries.push(trimmed);
+    addPlan({ query: trimmed, matchedKeyword: trimmed, sort: "relevance" });
+    addPlan({ query: trimmed, matchedKeyword: trimmed, sort: "new" });
 
-    if (
-      !/alternative|compare|versus|vs|problem|pain|looking for|need help|recommend|best/i.test(
-        trimmed,
-      )
-    ) {
-      queries.push(`alternative to ${trimmed}`);
-      queries.push(`best ${trimmed}`);
-      queries.push(`need help with ${trimmed}`);
-    }
+    addPlan({
+      query: `${trimmed} alternative`,
+      matchedKeyword: trimmed,
+      sort: "relevance",
+    });
+    addPlan({
+      query: `${trimmed} recommend`,
+      matchedKeyword: trimmed,
+      sort: "relevance",
+    });
   }
 
-  return Array.from(new Set(queries)).slice(0, 12);
+  for (const phrase of projectPhrases) {
+    addPlan({
+      query: phrase,
+      matchedKeyword: phrase,
+      sort: "relevance",
+    });
+  }
+
+  return plans.slice(0, 14);
 }
 
-function computeProductMatchScore(input: {
+function buildSubredditFollowupQueries(input: {
+  productName: string;
+  productDescription: string;
+  keywords: string[];
+  opportunities: OpportunityCard[];
+}) {
+  const projectPhrases = getProjectPhrases(input);
+  const searchTerms = Array.from(
+    new Set([
+      ...input.keywords.map((keyword) => keyword.trim()).filter(Boolean),
+      ...projectPhrases,
+    ]),
+  ).slice(0, 4);
+  const subredditScores = new Map<string, number>();
+
+  for (const opportunity of input.opportunities) {
+    const matchScore = computeProductMatchScore({
+      title: opportunity.title,
+      excerpt: opportunity.excerpt,
+      keyword: opportunity.keyword,
+      productName: input.productName,
+      productDescription: input.productDescription,
+    });
+    const score = Math.round(opportunity.intentScore * 0.55 + matchScore * 0.45);
+    subredditScores.set(
+      opportunity.subreddit,
+      Math.max(subredditScores.get(opportunity.subreddit) || 0, score),
+    );
+  }
+
+  const subreddits = Array.from(subredditScores.entries())
+    .sort((left, right) => right[1] - left[1])
+    .map(([subreddit]) => subreddit)
+    .slice(0, 4);
+
+  return subreddits.flatMap((subreddit) =>
+    searchTerms.map((term) => ({
+      query: term,
+      matchedKeyword: term,
+      sort: "new" as const,
+      subreddit,
+    })),
+  );
+}
+
+export function computeProductMatchScore(input: {
   title: string;
   excerpt: string;
   keyword: string;
@@ -598,47 +741,57 @@ function computeProductMatchScore(input: {
   return clamp(score, 0, 100);
 }
 
+export function filterProjectRelevantOpportunities(input: {
+  productName: string;
+  productDescription: string;
+  opportunities: OpportunityCard[];
+}) {
+  const scored = input.opportunities.map((opportunity) => ({
+    opportunity,
+    matchScore: computeProductMatchScore({
+      title: opportunity.title,
+      excerpt: opportunity.excerpt,
+      keyword: opportunity.keyword,
+      productName: input.productName,
+      productDescription: input.productDescription,
+    }),
+  }));
+
+  const filtered = scored.filter(({ opportunity, matchScore }) => {
+    if (matchScore >= 22) {
+      return true;
+    }
+
+    return opportunity.intentScore >= 68 && matchScore >= 14;
+  });
+
+  return filtered.length
+    ? filtered.map(({ opportunity }) => opportunity)
+    : scored
+        .filter(({ matchScore }) => matchScore >= 12)
+        .map(({ opportunity }) => opportunity);
+}
+
 export async function discoverOpportunities(input: {
   keywords: string[];
   productName: string;
   productDescription: string;
 }) {
-  const queries = expandDiscoveryQueries(input.keywords);
+  const searchPlans = expandDiscoveryQueries(input);
   const settled = await Promise.allSettled(
-    queries.map((keyword) => searchRedditByKeyword(keyword)),
+    searchPlans.map((plan) =>
+      searchRedditByKeyword(plan.query, {
+        matchedKeyword: plan.matchedKeyword,
+        sort: plan.sort,
+        subreddit: plan.subreddit,
+      }),
+    ),
   );
   const deduped = new Map<string, OpportunityCard>();
-  const failures = settled
-    .filter(
-      (result): result is PromiseRejectedResult => result.status === "rejected",
-    )
-    .map((result) =>
-      result.reason instanceof Error
-        ? result.reason.message
-        : String(result.reason),
-    );
+  const failures: string[] = [];
 
-  if (failures.length === settled.length && settled.length > 0) {
-    throw new RedditDiscoveryError(
-      "Reddit discovery failed for every search query.",
-      failures,
-    );
-  }
-
-  if (failures.length > 0) {
-    console.warn("Partial Reddit discovery failure", {
-      queryCount: queries.length,
-      failedQueryCount: failures.length,
-      sampleFailure: failures[0],
-    });
-  }
-
-  for (const result of settled) {
-    if (result.status !== "fulfilled") {
-      continue;
-    }
-
-    for (const opportunity of result.value) {
+  function mergeOpportunities(opportunities: OpportunityCard[]) {
+    for (const opportunity of opportunities) {
       const existing = deduped.get(opportunity.id);
       const matchScore = computeProductMatchScore({
         title: opportunity.title,
@@ -650,7 +803,7 @@ export async function discoverOpportunities(input: {
       const rescoredOpportunity = {
         ...opportunity,
         intentScore: clamp(
-          Math.round(opportunity.intentScore * 0.72 + matchScore * 0.28),
+          Math.round(opportunity.intentScore * 0.58 + matchScore * 0.42),
           0,
           100,
         ),
@@ -662,7 +815,74 @@ export async function discoverOpportunities(input: {
     }
   }
 
-  let opportunities = Array.from(deduped.values()).sort((left, right) => {
+  for (const result of settled) {
+    if (result.status === "fulfilled") {
+      mergeOpportunities(result.value);
+      continue;
+    }
+
+    failures.push(
+      result.reason instanceof Error
+        ? result.reason.message
+        : String(result.reason),
+    );
+  }
+
+  if (failures.length === settled.length && settled.length > 0) {
+    throw new RedditDiscoveryError(
+      "Reddit discovery failed for every search query.",
+      failures,
+    );
+  }
+
+  const firstPassOpportunities = filterProjectRelevantOpportunities({
+    productName: input.productName,
+    productDescription: input.productDescription,
+    opportunities: Array.from(deduped.values()),
+  });
+  const followupPlans = buildSubredditFollowupQueries({
+    ...input,
+    opportunities: firstPassOpportunities,
+  }).slice(0, 12);
+
+  if (followupPlans.length) {
+    const followupSettled = await Promise.allSettled(
+      followupPlans.map((plan) =>
+        searchRedditByKeyword(plan.query, {
+          matchedKeyword: plan.matchedKeyword,
+          sort: plan.sort,
+          subreddit: plan.subreddit,
+        }),
+      ),
+    );
+
+    for (const result of followupSettled) {
+      if (result.status === "fulfilled") {
+        mergeOpportunities(result.value);
+        continue;
+      }
+
+      failures.push(
+        result.reason instanceof Error
+          ? result.reason.message
+          : String(result.reason),
+      );
+    }
+  }
+
+  if (failures.length > 0) {
+    console.warn("Partial Reddit discovery failure", {
+      queryCount: searchPlans.length + followupPlans.length,
+      failedQueryCount: failures.length,
+      sampleFailure: failures[0],
+    });
+  }
+
+  let opportunities = filterProjectRelevantOpportunities({
+    productName: input.productName,
+    productDescription: input.productDescription,
+    opportunities: Array.from(deduped.values()),
+  }).sort((left, right) => {
     if (right.intentScore !== left.intentScore) {
       return right.intentScore - left.intentScore;
     }
@@ -680,20 +900,26 @@ export async function discoverOpportunities(input: {
   });
 
   if (reranked?.size) {
-    opportunities = opportunities.sort((left, right) => {
-      const leftScore = Math.round(
-        left.intentScore * 0.65 + (reranked.get(left.id) || 0) * 0.35,
-      );
-      const rightScore = Math.round(
-        right.intentScore * 0.65 + (reranked.get(right.id) || 0) * 0.35,
-      );
+    opportunities = opportunities
+      .filter((opportunity) => {
+        const aiScore = reranked.get(opportunity.id);
 
-      if (rightScore !== leftScore) {
-        return rightScore - leftScore;
-      }
+        return typeof aiScore !== "number" || aiScore >= 38;
+      })
+      .sort((left, right) => {
+        const leftScore = Math.round(
+          left.intentScore * 0.55 + (reranked.get(left.id) || 0) * 0.45,
+        );
+        const rightScore = Math.round(
+          right.intentScore * 0.55 + (reranked.get(right.id) || 0) * 0.45,
+        );
 
-      return right.intentScore - left.intentScore;
-    });
+        if (rightScore !== leftScore) {
+          return rightScore - leftScore;
+        }
+
+        return right.intentScore - left.intentScore;
+      });
   }
 
   return opportunities;
@@ -747,8 +973,17 @@ export function buildDailyActions(
   opportunities: OpportunityCard[],
   subreddits: SubredditCard[],
 ) {
-  const commentTargets = opportunities
-    .filter((opportunity) => opportunity.riskScore < 70)
+  const actionableOpportunities = opportunities.filter(
+    (opportunity) =>
+      opportunity.status !== "DISMISSED" &&
+      opportunity.status !== "REPLIED" &&
+      opportunity.intentScore >= 45 &&
+      opportunity.riskScore < 70,
+  );
+  const actionableSubredditNames = new Set(
+    actionableOpportunities.map((opportunity) => opportunity.subreddit),
+  );
+  const commentTargets = actionableOpportunities
     .slice(0, 2)
     .map((opportunity, index) => ({
       id: `comment-${opportunity.id}`,
@@ -771,8 +1006,12 @@ export function buildDailyActions(
     }));
 
   const bestPostingSubreddit =
-    subreddits.find((subreddit) => subreddit.promoTag === "safe") ??
-    subreddits[0];
+    subreddits.find(
+      (subreddit) =>
+        subreddit.promoTag === "safe" &&
+        actionableSubredditNames.has(subreddit.name),
+    ) ??
+    subreddits.find((subreddit) => actionableSubredditNames.has(subreddit.name));
   const postAction = bestPostingSubreddit
     ? [
         {

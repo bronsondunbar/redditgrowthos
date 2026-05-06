@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Radar } from "lucide-react";
 
 import {
   SignedIn,
@@ -9,6 +8,7 @@ import {
   UserButton,
 } from "@clerk/nextjs";
 
+import { BrandMark } from "@/components/brand-mark";
 import { appConfig, isClerkConfigured } from "@/lib/config";
 
 type AppShellProps = {
@@ -19,9 +19,7 @@ function BrandBlock() {
   return (
     <div>
       <div className="flex items-center gap-3">
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#155e63]/10 text-[#155e63]">
-          <Radar className="h-4 w-4" strokeWidth={2.2} />
-        </span>
+        <BrandMark className="h-9 w-9 shrink-0" />
         <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#8b8278]">
           {appConfig.name}
         </p>
@@ -35,20 +33,12 @@ function BrandBlock() {
 
 function SharedNavLinks() {
   return (
-    <>
-      <Link
-        href="/"
-        className="rounded-full px-4 py-2 text-sm font-medium text-[#14110f] transition hover:bg-black/5"
-      >
-        Home
-      </Link>
-      <Link
-        href="/dashboard"
-        className="rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-[#14110f] transition hover:bg-black/5"
-      >
-        Dashboard
-      </Link>
-    </>
+    <Link
+      href="/"
+      className="rounded-full px-4 py-2 text-sm font-medium text-[#14110f] transition hover:bg-black/5"
+    >
+      Home
+    </Link>
   );
 }
 
@@ -113,7 +103,7 @@ function AuthActions() {
 export function AppShell({ children }: AppShellProps) {
   return (
     <div className="app-shell-bg relative flex min-h-full flex-1 flex-col">
-      <header className="sticky top-0 z-30 px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
+      <header className="sticky top-0 z-30 px-6 pt-4 lg:px-10 lg:pt-6">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 rounded-[28px] border border-black/10 bg-[#fffdf8]/92 px-5 py-4 shadow-[0_10px_26px_rgba(20,17,15,0.05)] backdrop-blur">
           <Link href="/" className="min-w-0">
             <BrandBlock />
@@ -130,13 +120,11 @@ export function AppShell({ children }: AppShellProps) {
 
       <div className="flex-1">{children}</div>
 
-      <footer className="px-4 pb-6 pt-10 sm:px-6 lg:px-8 lg:pb-8">
+      <footer className="px-6 pb-6 pt-10 lg:px-10 lg:pb-8">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 rounded-[28px] border border-black/10 bg-[#fffdf8]/88 px-6 py-6 shadow-[0_10px_28px_rgba(20,17,15,0.04)] md:flex-row md:items-end md:justify-between">
           <div>
             <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#155e63]/10 text-[#155e63]">
-                <Radar className="h-4 w-4" strokeWidth={2.2} />
-              </span>
+              <BrandMark className="h-9 w-9 shrink-0" />
               <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#8b8278]">
                 {appConfig.name}
               </p>
