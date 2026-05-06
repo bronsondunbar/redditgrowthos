@@ -1,202 +1,230 @@
+import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  MessageSquareText,
+  Radar,
+  Route,
+  ShieldCheck,
+} from "lucide-react";
 
 import { BrandMark } from "@/components/brand-mark";
 import { isClerkConfigured } from "@/lib/config";
 
-const outcomes = [
+const proofPoints = [
+  "Intent-ranked Reddit threads",
+  "Daily action queue",
+  "Help-first reply drafting",
+];
+
+const signals = [
   {
-    title: "See buyer language before you write",
-    copy: "Track active threads, pain points, and objection patterns so your replies sound native to the conversation instead of dropped in from a template.",
+    label: "Buying language",
+    value: "86",
+    tone: "text-[#d95d39]",
   },
   {
-    title: "Work from a daily operating plan",
-    copy: "Turn discovery into a clear next move: one post worth publishing, two comments worth answering, and fewer tabs fighting for attention.",
+    label: "Subreddit fit",
+    value: "72",
+    tone: "text-[#155e63]",
   },
   {
-    title: "Stay useful without over-promoting",
-    copy: "Use reply drafts and risk notes to help first, mention the product second, and avoid burning trust in communities that could become long-term channels.",
+    label: "Promotion risk",
+    value: "Low",
+    tone: "text-[#2f7d59]",
   },
 ];
 
-const proof = [
-  "One workspace for multiple products or clients",
-  "Live thread scoring and subreddit safety cues",
-  "Reply drafting, post drafting, and tracked follow-up",
+const operatingLoop = [
+  {
+    icon: Radar,
+    title: "Discover live demand",
+    copy: "Pull real threads into one workspace with context, urgency, and subreddit safety already attached.",
+  },
+  {
+    icon: Route,
+    title: "Choose the next move",
+    copy: "Turn the noise into a small daily plan: publish one useful post, answer the right comments, and track follow-up.",
+  },
+  {
+    icon: MessageSquareText,
+    title: "Draft like a regular",
+    copy: "Shape replies around the thread's language so the product mention earns its place instead of feeling bolted on.",
+  },
+];
+
+const productHighlights = [
+  {
+    title: "Workspace memory",
+    copy: "Keep products, keywords, saved opportunities, post drafts, and tracked posts together instead of spread across tabs.",
+  },
+  {
+    title: "Risk-aware writing",
+    copy: "Spot communities where direct selling will backfire and keep your replies useful enough to stay welcome.",
+  },
+  {
+    title: "Repeatable growth rhythm",
+    copy: "Make Reddit a daily operating loop for discovery, participation, and follow-up rather than a research rabbit hole.",
+  },
 ];
 
 export default function Home() {
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-6 py-8 lg:px-10 lg:py-10">
-      <section className="app-panel grid gap-8 p-8 lg:grid-cols-[1.08fr_0.92fr] lg:p-10">
-        <div className="space-y-6">
-          <span className="app-kicker">Founder-focused Reddit operating system</span>
+    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+      <section className="landing-hero relative isolate overflow-hidden rounded-xl border border-black/10">
+        <Image
+          src="/redditgrowthos-hero.png"
+          alt=""
+          fill
+          priority
+          sizes="(max-width: 768px) 100vw, 1280px"
+          className="object-cover"
+        />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(10,11,11,0.88)_0%,rgba(18,23,23,0.74)_34%,rgba(20,17,15,0.22)_72%,rgba(20,17,15,0.12)_100%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(217,93,57,0.2),transparent_30%),linear-gradient(180deg,rgba(0,0,0,0)_62%,rgba(0,0,0,0.36)_100%)]" />
 
-          <div className="space-y-4">
-            <h1 className="app-title max-w-4xl text-5xl sm:text-6xl">
-              Find live demand on Reddit and turn it into today&apos;s growth
-              plan.
+        <div className="relative flex min-h-[430px] flex-col justify-between gap-12 p-6 text-white sm:min-h-[520px] sm:p-8 lg:min-h-[610px] lg:p-10">
+          <div className="max-w-3xl pt-10 sm:pt-14 lg:pt-20">
+            <span className="inline-flex items-center gap-2 rounded-lg border border-white/18 bg-white/10 px-3 py-2 font-mono text-xs uppercase text-[#f3d8c9] backdrop-blur">
+              <BrandMark className="h-6 w-6 shrink-0" />
+              Founder-focused Reddit operating system
+            </span>
+
+            <h1 className="mt-6 max-w-2xl text-5xl font-semibold leading-[1.02] text-white sm:text-6xl lg:text-7xl">
+              RedditGrowthOS
             </h1>
-            <p className="app-copy max-w-2xl text-lg">
-              RedditGrowthOS helps founders spot active buying intent, prioritize
-              the right threads, and draft useful responses without rebuilding
-              the workflow from scratch every morning.
+            <p className="mt-5 max-w-2xl text-lg leading-8 text-[#f4eee6] sm:text-xl">
+              Find live buyer intent on Reddit, prioritize the conversations
+              worth entering, and turn today&apos;s best threads into a clear
+              growth plan.
             </p>
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href="/dashboard"
+                className="app-button app-button-primary min-w-44 gap-2"
+                style={{ color: "#ffffff", WebkitTextFillColor: "#ffffff" }}
+              >
+                Open workspace
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                href={isClerkConfigured ? "/sign-in" : "/dashboard"}
+                className="app-button border-white/24 bg-white/92 text-[#14110f] hover:bg-white"
+                style={{ color: "#14110f", WebkitTextFillColor: "#14110f" }}
+              >
+                {isClerkConfigured ? "Sign in" : "Preview without auth"}
+              </Link>
+            </div>
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/dashboard"
-              className="app-button app-button-primary min-w-44 gap-2"
-              style={{ color: "#ffffff", WebkitTextFillColor: "#ffffff" }}
-            >
-              Enter workspace
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link
-              href={isClerkConfigured ? "/sign-in" : "/dashboard"}
-              className="app-button app-button-secondary min-w-40"
-              style={{ color: "#14110f", WebkitTextFillColor: "#14110f" }}
-            >
-              {isClerkConfigured ? "Sign in" : "Preview without auth"}
-            </Link>
-          </div>
-
-          <div className="grid gap-3 pt-2 sm:grid-cols-3">
-            {proof.map((item) => (
+          <div className="grid max-w-4xl gap-3 sm:grid-cols-3">
+            {proofPoints.map((item) => (
               <div
                 key={item}
-                className="rounded-[22px] border border-black/10 bg-white/64 p-4 text-sm leading-6 text-[#4f4740]"
+                className="rounded-lg border border-white/16 bg-black/28 p-4 text-sm leading-6 text-[#fffaf3] backdrop-blur"
               >
+                <CheckCircle2 className="mb-3 h-5 w-5 text-[#f47a2f]" />
                 {item}
               </div>
             ))}
           </div>
         </div>
+      </section>
 
-        <div className="app-panel-strong grid gap-4 p-6">
-          <div className="rounded-[24px] border border-white/12 bg-white/8 p-5">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#cfe3e4]">
-                  Today&apos;s operating rhythm
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em]">
-                  One channel. Three clear moves.
-                </h2>
-              </div>
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10">
-                <BrandMark className="h-8 w-8" />
-              </span>
-            </div>
-          </div>
+      <section className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+        <div className="app-panel p-6 sm:p-8">
+          <span className="app-kicker">What changes after setup</span>
+          <h2 className="app-title mt-4 max-w-2xl text-3xl sm:text-4xl">
+            Your Reddit workflow stops starting from a blank search box.
+          </h2>
+          <p className="app-copy mt-4 max-w-2xl text-base">
+            The workspace keeps discovery, scoring, drafting, and follow-up in
+            one place so each day starts with ranked opportunities instead of
+            scattered research.
+          </p>
 
-          <div className="grid gap-3">
-            {[
-              "Post where founder pain is already visible.",
-              "Reply to a fresh thread with helpful context first.",
-              "Save high-risk conversations for later follow-up.",
-            ].map((step, index) => (
+          <div className="mt-8 grid gap-3 sm:grid-cols-3">
+            {signals.map((signal) => (
               <div
-                key={step}
-                className="flex items-start gap-4 rounded-[22px] border border-white/10 bg-[#12484c] p-5"
+                key={signal.label}
+                className="rounded-lg border border-black/10 bg-[#f7f1e7] p-4"
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-white">
-                  {index + 1}
-                </span>
-                <p className="text-sm leading-7 text-[#e6f2f2]">{step}</p>
+                <p className="font-mono text-xs uppercase text-[#7b7267]">
+                  {signal.label}
+                </p>
+                <p className={`mt-3 text-3xl font-semibold ${signal.tone}`}>
+                  {signal.value}
+                </p>
               </div>
             ))}
           </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-[22px] border border-white/10 bg-white/8 p-5">
-              <p className="font-mono text-xs uppercase tracking-[0.22em] text-[#cfe3e4]">
-                Intent signals
-              </p>
-              <p className="mt-3 text-3xl font-semibold tracking-[-0.04em]">
-                Ranked daily
-              </p>
-              <p className="mt-2 text-sm leading-6 text-[#d4e7e7]">
-                Prioritize threads by urgency, fit, and safety.
-              </p>
-            </div>
-            <div className="rounded-[22px] border border-white/10 bg-white/8 p-5">
-              <p className="font-mono text-xs uppercase tracking-[0.22em] text-[#cfe3e4]">
-                Draft support
-              </p>
-              <p className="mt-3 text-3xl font-semibold tracking-[-0.04em]">
-                Help-first copy
-              </p>
-              <p className="mt-2 text-sm leading-6 text-[#d4e7e7]">
-                Keep answers credible while still moving toward pipeline.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-3">
-        {outcomes.map((outcome) => (
-          <article key={outcome.title} className="app-panel-muted p-6">
-            <h2 className="app-title text-2xl">{outcome.title}</h2>
-            <p className="app-copy mt-3 text-sm">{outcome.copy}</p>
-          </article>
-        ))}
-      </section>
-
-      <section className="app-panel grid gap-6 p-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start lg:p-10">
-        <div>
-          <span className="app-kicker">Why teams keep this open all day</span>
-          <h2 className="app-title mt-4 text-3xl sm:text-4xl">
-            Less hunting. More useful participation.
-          </h2>
-          <p className="app-copy mt-4 max-w-2xl text-base">
-            Most Reddit workflows break because discovery, drafting, and follow-up
-            live in different places. This product keeps the signal, the context,
-            and the next action in one calm workspace.
-          </p>
         </div>
 
         <div className="grid gap-4">
-          {[
-            {
-              label: "Workspace structure",
-              copy: "Switch between products without losing separate keywords, threads, and saved drafts.",
-            },
-            {
-              label: "Action queue",
-              copy: "Get a small set of worthwhile actions instead of a noisy stream of possibilities.",
-            },
-            {
-              label: "Operational memory",
-              copy: "Track posts and draft replies so good opportunities do not disappear into browser tabs.",
-            },
-          ].map((item) => (
-            <div
-              key={item.label}
-              className="rounded-[22px] border border-black/10 bg-[#f7f1e7] p-5"
+          {operatingLoop.map((item, index) => {
+            const Icon = item.icon;
+
+            return (
+              <article
+                key={item.title}
+                className="app-panel-muted grid gap-4 p-5 sm:grid-cols-[auto_1fr] sm:p-6"
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#155e63] text-white">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-mono text-xs uppercase text-[#8b8278]">
+                    Step {index + 1}
+                  </p>
+                  <h3 className="app-title mt-2 text-2xl">{item.title}</h3>
+                  <p className="app-copy mt-2 text-sm">{item.copy}</p>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="app-panel grid gap-6 p-6 sm:p-8 lg:grid-cols-[0.8fr_1.2fr] lg:p-10">
+        <div>
+          <span className="app-kicker">Built for careful participation</span>
+          <h2 className="app-title mt-4 text-3xl sm:text-4xl">
+            Helpful first. Commercial second.
+          </h2>
+          <p className="app-copy mt-4 text-base">
+            Reddit rewards people who understand the room. RedditGrowthOS helps
+            you see the room before you write, then keeps the next action small
+            enough to actually ship.
+          </p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          {productHighlights.map((highlight) => (
+            <article
+              key={highlight.title}
+              className="rounded-lg border border-black/10 bg-white/70 p-5"
             >
-              <p className="font-mono text-xs uppercase tracking-[0.22em] text-[#8b8278]">
-                {item.label}
-              </p>
-              <p className="mt-3 text-base leading-7 text-[#4f4740]">
-                {item.copy}
-              </p>
-            </div>
+              <ShieldCheck className="h-5 w-5 text-[#155e63]" />
+              <h3 className="app-title mt-4 text-xl">{highlight.title}</h3>
+              <p className="app-copy mt-3 text-sm">{highlight.copy}</p>
+            </article>
           ))}
         </div>
       </section>
 
-      <section className="app-panel flex flex-col gap-5 p-8 lg:flex-row lg:items-center lg:justify-between lg:p-10">
+      <section className="landing-cta grid gap-5 rounded-xl border border-black/10 p-6 text-white sm:p-8 lg:grid-cols-[1fr_auto] lg:items-center lg:p-10">
         <div>
-          <span className="app-kicker">Start with one workspace</span>
-          <h2 className="app-title mt-4 text-3xl">
-            Build a repeatable Reddit growth routine.
+          <span className="font-mono text-xs uppercase text-[#f3d8c9]">
+            Start with one workspace
+          </span>
+          <h2 className="mt-4 max-w-2xl text-3xl font-semibold sm:text-4xl">
+            Build a Reddit growth routine you can repeat tomorrow.
           </h2>
-          <p className="app-copy mt-3 max-w-2xl text-base">
-            Open the dashboard, set up a project, and let the workspace turn live
-            conversations into a daily operating loop.
+          <p className="mt-3 max-w-2xl text-base leading-7 text-[#f4eee6]">
+            Open the dashboard, set up a project, and let the workspace turn
+            live conversations into the day&apos;s clearest moves.
           </p>
         </div>
 
@@ -210,7 +238,7 @@ export default function Home() {
           </Link>
           <Link
             href={isClerkConfigured ? "/sign-up" : "/dashboard"}
-            className="app-button app-button-secondary min-w-40"
+            className="app-button bg-white text-[#14110f] hover:bg-[#fff7ed]"
             style={{ color: "#14110f", WebkitTextFillColor: "#14110f" }}
           >
             {isClerkConfigured ? "Create account" : "Explore preview"}

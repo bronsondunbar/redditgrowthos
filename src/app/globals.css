@@ -145,6 +145,18 @@ a {
   color: var(--foreground);
 }
 
+.landing-hero,
+.landing-cta {
+  background:
+    linear-gradient(135deg, rgba(20, 17, 15, 0.96), rgba(21, 94, 99, 0.9)),
+    var(--foreground);
+  box-shadow: 0 24px 70px rgba(20, 17, 15, 0.16);
+}
+
+.landing-hero img {
+  transform: scale(1.01);
+}
+
 @keyframes panel-overlay-in {
   from {
     opacity: 0;
