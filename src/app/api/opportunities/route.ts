@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { isClerkConfigured, isDatabaseConfigured } from "@/lib/config";
 import { RedditDiscoveryError } from "@/lib/reddit";
+import { isValidSubredditName, parseSubredditList } from "@/lib/subreddits";
 import {
   ensureUser,
   persistDiscovery,
@@ -38,6 +39,17 @@ const discoverySchema = z.object({
   websiteUrl: z.string().trim().max(2048).optional().default(""),
   productName: z.string().trim().min(2).max(80),
   productDescription: z.string().trim().min(12).max(500),
+  excludedSubreddits: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .default("")
+    .transform(parseSubredditList)
+    .refine(
+      (value) => value.every(isValidSubredditName),
+      "Use valid subreddit names separated by commas or new lines.",
+    ),
   keywords: z
     .string()
     .trim()

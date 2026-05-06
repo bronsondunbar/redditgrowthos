@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startTransition, useMemo, useState } from "react";
 
+import { parseSubredditList } from "@/lib/subreddits";
 import type {
   ActionCard,
   DashboardState,
@@ -276,6 +277,9 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
   const [form, setForm] = useState<ProjectFormState>(
     buildFormState(initialState),
   );
+  const [profileExcludedSubreddits, setProfileExcludedSubreddits] = useState(
+    initialState.excludedSubreddits.join(", "),
+  );
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>(() =>
@@ -314,6 +318,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
     null,
   );
   const [isDeletingProject, setIsDeletingProject] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [commentReplyComposer, setCommentReplyComposer] =
     useState<CommentReplyComposerState>(buildEmptyCommentReplyComposer);
   const [postCommentComposer, setPostCommentComposer] =
@@ -412,6 +417,12 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
     return opportunity.intentScore < 70;
   });
   const hasOpportunities = visibleOpportunities.length > 0;
+
+  function applyDashboardState(nextDashboard: DashboardState) {
+    setDashboard(nextDashboard);
+    setForm(buildFormState(nextDashboard));
+    setProfileExcludedSubreddits(nextDashboard.excludedSubreddits.join(", "));
+  }
 
   function openNewProjectComposer() {
     setError(null);
@@ -519,7 +530,10 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(discoveryPayload),
+      body: JSON.stringify({
+        ...discoveryPayload,
+        excludedSubreddits: profileExcludedSubreddits,
+      }),
     });
 
     const payload = (await response.json()) as {
@@ -535,8 +549,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
       return;
     }
 
-    setDashboard(payload.dashboard);
-    setForm(buildFormState(payload.dashboard));
+    applyDashboardState(payload.dashboard);
     setOpportunityFilter(
       getDefaultOpportunityFilter(payload.dashboard.opportunities),
     );
@@ -592,8 +605,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
       return;
     }
 
-    setDashboard(payload.dashboard);
-    setForm(buildFormState(payload.dashboard));
+    applyDashboardState(payload.dashboard);
     setOpportunityFilter(
       getDefaultOpportunityFilter(payload.dashboard.opportunities),
     );
@@ -644,8 +656,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
       return;
     }
 
-    setDashboard(payload.dashboard);
-    setForm(buildFormState(payload.dashboard));
+    applyDashboardState(payload.dashboard);
     setOpportunityFilter(
       getDefaultOpportunityFilter(payload.dashboard.opportunities),
     );
@@ -709,6 +720,53 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
           : item,
       ),
     }));
+  }
+
+  async function handleSaveProfileSettings() {
+    setError(null);
+    setNotice(null);
+
+    if (!dashboard.configured.clerk || !dashboard.configured.database) {
+      setDashboard((current) => ({
+        ...current,
+        excludedSubreddits: parseSubredditList(profileExcludedSubreddits),
+      }));
+      setNotice(
+        "Reddit account exclusions updated locally. Configure Clerk + Neon to persist them.",
+      );
+      return;
+    }
+
+    setIsSavingProfile(true);
+
+    const response = await fetch("/api/profile", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        excludedSubreddits: profileExcludedSubreddits,
+      }),
+    });
+
+    const payload = (await response.json()) as {
+      excludedSubreddits?: string[];
+      error?: string;
+    };
+
+    setIsSavingProfile(false);
+
+    if (!response.ok || !payload.excludedSubreddits) {
+      setError(payload.error || "Could not update the Reddit account settings.");
+      return;
+    }
+
+    setDashboard((current) => ({
+      ...current,
+      excludedSubreddits: payload.excludedSubreddits!,
+    }));
+    setProfileExcludedSubreddits(payload.excludedSubreddits.join(", "));
+    setNotice("Reddit account exclusions saved.");
   }
 
   async function updateWorkflow(opportunityId: string, status: WorkflowStatus) {
@@ -1174,8 +1232,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
       return;
     }
 
-    setDashboard(payload.dashboard);
-    setForm(buildFormState(payload.dashboard));
+    applyDashboardState(payload.dashboard);
     setOpportunityFilter(
       getDefaultOpportunityFilter(payload.dashboard.opportunities),
     );
@@ -1398,6 +1455,35 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
               ? "Refreshing all..."
               : "Re-run all discovery"}
           </button>
+
+          <div className="mt-4 rounded-lg border border-black/10 bg-white p-3">
+            <p className="font-mono text-xs uppercase tracking-normal text-[#8b8278]">
+              Reddit account
+            </p>
+            <h3 className="mt-1 text-sm font-semibold text-[#14110f]">
+              Excluded subreddits
+            </h3>
+            <p className="mt-1 text-xs leading-5 text-[#5b524a]">
+              Apply one ban list across every project tied to this Reddit
+              account.
+            </p>
+            <textarea
+              value={profileExcludedSubreddits}
+              onChange={(event) =>
+                setProfileExcludedSubreddits(event.target.value)
+              }
+              className="mt-3 min-h-24 w-full rounded-lg border border-black/10 bg-[#fffdf8] px-3 py-2 text-sm outline-none transition focus:border-[#d95d39]"
+              placeholder="startups, SaaS&#10;marketing"
+            />
+            <button
+              type="button"
+              onClick={handleSaveProfileSettings}
+              disabled={isSavingProfile}
+              className="mt-3 w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSavingProfile ? "Saving..." : "Save Reddit account settings"}
+            </button>
+          </div>
         </aside>
 
         <div className="min-w-0 space-y-4">

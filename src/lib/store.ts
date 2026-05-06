@@ -48,6 +48,7 @@ function createDashboardState(input: {
   websiteUrl: string;
   productName: string;
   productDescription: string;
+  excludedSubreddits: string[];
   trackedKeywords: string[];
   trackedPosts: TrackedPostCard[];
   postDrafts: PostDraftCard[];
@@ -77,6 +78,7 @@ function createDashboardState(input: {
     websiteUrl: input.websiteUrl,
     productName: input.productName,
     productDescription: input.productDescription,
+    excludedSubreddits: input.excludedSubreddits,
     trackedKeywords: input.trackedKeywords,
     trackedPosts: input.trackedPosts,
     postDrafts: input.postDrafts,
@@ -88,7 +90,9 @@ function createDashboardState(input: {
 }
 
 function buildEmptyState(
-  input?: Partial<Pick<DashboardState, "requiresAuth" | "demoMode">>,
+  input?: Partial<
+    Pick<DashboardState, "requiresAuth" | "demoMode" | "excludedSubreddits">
+  >,
 ) {
   return createDashboardState({
     projects: [],
@@ -97,6 +101,7 @@ function buildEmptyState(
     productName: "RedditGrowthOS",
     productDescription:
       "A Reddit growth workspace for founders that combines opportunity discovery, reply drafting, and a daily action plan.",
+    excludedSubreddits: input?.excludedSubreddits ?? [],
     trackedKeywords: [],
     trackedPosts: [],
     postDrafts: [],
@@ -114,7 +119,7 @@ export async function ensureUser(clerkId: string) {
   return prisma.user.upsert({
     where: { clerkId },
     update: {},
-    create: { clerkId },
+    create: { clerkId, excludedSubreddits: [] },
   });
 }
 
@@ -244,6 +249,13 @@ async function getDashboardStateForUser(
     return buildEmptyState();
   }
 
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      excludedSubreddits: true,
+    },
+  });
+
   const projects = await prisma.project.findMany({
     where: { userId },
     include: {
@@ -258,7 +270,9 @@ async function getDashboardStateForUser(
   });
 
   if (!projects.length) {
-    return buildEmptyState();
+    return buildEmptyState({
+      excludedSubreddits: user?.excludedSubreddits || [],
+    });
   }
 
   const currentProject =
@@ -304,6 +318,7 @@ async function getDashboardStateForUser(
     websiteUrl: currentProject.websiteUrl || "",
     productName: currentProject.name,
     productDescription: currentProject.description || "",
+    excludedSubreddits: user?.excludedSubreddits || [],
     trackedKeywords: keywords.map((keyword) => keyword.term),
     trackedPosts: trackedPosts.map(toTrackedPostCard),
     postDrafts: postDrafts.map(toPostDraftCard),
@@ -354,6 +369,7 @@ export function buildTransientDashboardState(
     websiteUrl: payload.websiteUrl || "",
     productName: payload.productName,
     productDescription: payload.productDescription,
+    excludedSubreddits: payload.excludedSubreddits,
     trackedKeywords: payload.keywords,
     trackedPosts: [],
     postDrafts: [],
@@ -368,6 +384,7 @@ export async function runDiscovery(payload: DiscoveryPayload) {
     keywords: payload.keywords,
     productName: payload.productName,
     productDescription: payload.productDescription,
+    excludedSubreddits: payload.excludedSubreddits,
   });
   return buildTransientDashboardState(payload, opportunities);
 }
@@ -533,6 +550,13 @@ export async function persistDiscovery(
           },
         });
 
+    await tx.user.update({
+      where: { id: user.id },
+      data: {
+        excludedSubreddits: payload.excludedSubreddits,
+      },
+    });
+
     await persistProjectDiscoveryRecords(tx, {
       userId: user.id,
       projectId: project.id,
@@ -598,11 +622,17 @@ export async function refreshProjectDiscovery(
     return null;
   }
 
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { excludedSubreddits: true },
+  });
+
   const payload: DiscoveryPayload = {
     projectId: project.id,
     websiteUrl: project.websiteUrl || "",
     productName: project.name,
     productDescription: project.description || "",
+    excludedSubreddits: user?.excludedSubreddits || [],
     keywords: project.trackedKeywords.map((keyword) => keyword.term),
   };
 

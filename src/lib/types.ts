@@ -92,6 +92,7 @@ export type DashboardState = {
   websiteUrl: string;
   productName: string;
   productDescription: string;
+  excludedSubreddits: string[];
   trackedKeywords: string[];
   analytics: {
     totalOpportunities: number;
@@ -112,5 +113,6 @@ export type DiscoveryPayload = {
   websiteUrl?: string;
   productName: string;
   productDescription: string;
+  excludedSubreddits: string[];
   keywords: string[];
 };

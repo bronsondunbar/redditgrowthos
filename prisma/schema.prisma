@@ -20,6 +20,7 @@ model User {
   clerkId            String          @unique
   productName        String?
   productDescription String?
+  excludedSubreddits String[]
   projects           Project[]
   trackedKeywords    TrackedKeyword[]
   opportunities      Opportunity[]

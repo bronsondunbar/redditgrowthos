@@ -1,4 +1,5 @@
 import { isRedditConfigured, redditUserAgent } from "@/lib/config";
+import { normalizeSubredditName } from "@/lib/subreddits";
 import { rerankOpportunityMatches } from "@/lib/ai";
 import type {
   ActionCard,
@@ -821,7 +822,11 @@ export async function discoverOpportunities(input: {
   keywords: string[];
   productName: string;
   productDescription: string;
+  excludedSubreddits: string[];
 }) {
+  const excludedSubreddits = new Set(
+    input.excludedSubreddits.map(normalizeSubredditName).filter(Boolean),
+  );
   const searchPlans = expandDiscoveryQueries(input);
   const settled = await Promise.allSettled(
     searchPlans.map((plan) =>
@@ -837,6 +842,10 @@ export async function discoverOpportunities(input: {
 
   function mergeOpportunities(opportunities: OpportunityCard[]) {
     for (const opportunity of opportunities) {
+      if (excludedSubreddits.has(normalizeSubredditName(opportunity.subreddit))) {
+        continue;
+      }
+
       const existing = deduped.get(opportunity.id);
       const matchScore = computeProductMatchScore({
         title: opportunity.title,
