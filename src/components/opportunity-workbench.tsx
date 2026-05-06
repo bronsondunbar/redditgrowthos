@@ -509,12 +509,17 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
     setNotice(null);
     setIsDiscovering(true);
 
+    const discoveryPayload: ProjectFormState = {
+      ...form,
+      projectId: composerMode === "create" ? null : form.projectId,
+    };
+
     const response = await fetch("/api/opportunities", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(form),
+      body: JSON.stringify(discoveryPayload),
     });
 
     const payload = (await response.json()) as {
