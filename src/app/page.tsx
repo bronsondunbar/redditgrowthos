@@ -2,7 +2,9 @@ import Link from "next/link";
 import {
   ArrowRight,
   CheckCircle2,
+  Clock3,
   MessageSquareText,
+  PlayCircle,
   Radar,
   Route,
   ShieldCheck,
@@ -52,6 +54,12 @@ const previewActions = [
     summary: "Useful educational post with low direct-promotion risk.",
     button: "Draft post",
   },
+];
+
+const walkthroughChapters = [
+  "Set up a product workspace",
+  "Review ranked Reddit opportunities",
+  "Draft a useful reply or post",
 ];
 
 const signals = [
@@ -274,6 +282,66 @@ export default function Home() {
           </div>
 
           <DashboardPreview />
+        </div>
+      </section>
+
+      <section className="app-panel grid gap-6 p-6 sm:p-8 lg:p-10">
+        <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-end">
+          <div>
+            <span className="app-kicker">Product walkthrough</span>
+            <h2 className="app-title mt-4 max-w-3xl text-3xl sm:text-4xl">
+              See the daily Reddit workflow in one pass.
+            </h2>
+            <p className="app-copy mt-4 max-w-3xl text-base">
+              A short walkthrough belongs here: from creating a workspace to
+              choosing the day&apos;s best thread and drafting a help-first reply.
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+            {walkthroughChapters.map((chapter, index) => (
+              <div
+                key={chapter}
+                className="flex items-center gap-3 rounded-lg border border-black/10 bg-[#f7f1e7] p-3 text-sm font-semibold text-[#14110f]"
+              >
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#155e63] text-xs text-white">
+                  {index + 1}
+                </span>
+                {chapter}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-black/10 bg-[#14110f] p-3 shadow-[0_18px_50px_rgba(20,17,15,0.14)]">
+          <div className="aspect-video rounded-lg border border-white/10 bg-[linear-gradient(135deg,#1a302f,#101312_56%,#2b1a14)] p-4 text-white">
+            <div className="flex h-full flex-col justify-between rounded-lg border border-white/10 bg-black/18 p-5">
+              <div className="flex items-center justify-between gap-3">
+                <span className="rounded-md bg-white/10 px-3 py-2 font-mono text-xs uppercase text-[#f3d8c9]">
+                  Walkthrough video
+                </span>
+                <span className="inline-flex items-center gap-2 rounded-md bg-white/10 px-3 py-2 text-xs text-[#f4eee6]">
+                  <Clock3 className="h-3.5 w-3.5" />
+                  3 min
+                </span>
+              </div>
+
+              <div className="flex items-center justify-center">
+                <span className="flex h-20 w-20 items-center justify-center rounded-full bg-[#d95d39] text-white shadow-[0_14px_34px_rgba(217,93,57,0.34)]">
+                  <PlayCircle className="h-10 w-10" />
+                </span>
+              </div>
+
+              <div>
+                <p className="text-lg font-semibold">
+                  RedditGrowthOS daily workflow
+                </p>
+                <p className="mt-2 max-w-xl text-sm leading-6 text-[#f4eee6]">
+                  Drop the final video asset here when it is ready.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
