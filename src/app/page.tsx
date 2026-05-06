@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -16,6 +15,43 @@ const proofPoints = [
   "Intent-ranked Reddit threads",
   "Daily action queue",
   "Help-first reply drafting",
+];
+
+const previewProjects = [
+  {
+    name: "Shipnote",
+    meta: "7 keywords · 18 opps · Last discovery today",
+    active: true,
+  },
+  {
+    name: "Founder CRM",
+    meta: "5 keywords · 9 opps · Last discovery yesterday",
+    active: false,
+  },
+];
+
+const previewMetrics = [
+  ["Opportunities", "18"],
+  ["Hot leads", "6"],
+  ["Replied", "4"],
+  ["Avg intent", "72"],
+];
+
+const previewActions = [
+  {
+    type: "COMMENT · HIGH",
+    title: "Founder asking how to track customer calls without a CRM",
+    subreddit: "SaaS",
+    summary: "Thread has a clear workflow pain and a recent buying signal.",
+    button: "Draft reply",
+  },
+  {
+    type: "POST · MEDIUM",
+    title: "Share a teardown of manual onboarding follow-up",
+    subreddit: "startups",
+    summary: "Useful educational post with low direct-promotion risk.",
+    button: "Draft post",
+  },
 ];
 
 const signals = [
@@ -69,23 +105,129 @@ const productHighlights = [
   },
 ];
 
+function DashboardPreview() {
+  return (
+    <div className="landing-dashboard-preview min-w-0 rounded-xl border border-black/10 bg-[#f6f4ef] p-3 shadow-[0_22px_70px_rgba(20,17,15,0.26)]">
+      <div className="grid gap-3 lg:grid-cols-[12rem_minmax(0,1fr)]">
+        <aside className="rounded-lg border border-black/10 bg-[#fffdf8] p-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-[#14110f]">
+              Workspace projects
+            </h2>
+            <span className="rounded-md bg-[#d95d39] px-2 py-1 text-xs font-semibold text-white">
+              New
+            </span>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            {previewProjects.map((project) => (
+              <div
+                key={project.name}
+                className={`rounded-lg border px-3 py-3 ${
+                  project.active
+                    ? "border-[#155e63]/40 bg-[#edf6f6]"
+                    : "border-black/10 bg-white"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-sm font-semibold text-[#14110f]">
+                    {project.name}
+                  </p>
+                  {project.active ? (
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-[#155e63]" />
+                  ) : null}
+                </div>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#6b6258]">
+                  {project.meta}
+                </p>
+              </div>
+            ))}
+          </div>
+        </aside>
+
+        <div className="min-w-0 space-y-3">
+          <section className="rounded-lg border border-black/10 bg-[#fffdf8] p-4">
+            <p className="font-mono text-xs uppercase text-[#8b8278]">
+              Current project
+            </p>
+            <h2 className="mt-1 text-2xl font-semibold leading-tight text-[#14110f]">
+              Shipnote
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#4f4740]">
+              Customer support note-taking for founders who need searchable
+              call history, follow-up reminders, and lightweight account memory.
+            </p>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 border-t border-black/10 pt-4">
+              {previewMetrics.map(([label, value]) => (
+                <div key={label}>
+                  <p className="text-[0.7rem] leading-4 text-[#6b6258]">
+                    {label}
+                  </p>
+                  <p className="mt-1 text-lg font-semibold leading-none text-[#14110f]">
+                    {value}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-black/10 bg-[#fffdf8] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-[#14110f]">
+                Today&apos;s 3 actions
+              </h2>
+              <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#6b6258]">
+                Preview
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-2">
+              {previewActions.map((action) => (
+                <article
+                  key={action.title}
+                  className="flex min-h-[9.5rem] flex-col rounded-lg border border-black/10 bg-white p-4"
+                >
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium uppercase text-[#6b6258]">
+                        {action.type}
+                      </p>
+                      <h3 className="mt-1 line-clamp-2 text-base font-semibold text-[#14110f]">
+                        {action.title}
+                      </h3>
+                    </div>
+                    <span className="max-w-24 shrink-0 truncate rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#6b6258]">
+                      r/{action.subreddit}
+                    </span>
+                  </div>
+                  <p className="mt-3 line-clamp-2 text-sm leading-6 text-[#4f4740]">
+                    {action.summary}
+                  </p>
+                  <div className="mt-auto flex flex-wrap gap-2 pt-3">
+                    <span className="rounded-md bg-[#d95d39] px-3 py-2 text-sm font-semibold text-white">
+                      {action.button}
+                    </span>
+                    <span className="rounded-md border border-[#155e63]/25 px-3 py-2 text-sm font-semibold text-[#155e63]">
+                      Complete
+                    </span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
-      <section className="landing-hero relative isolate overflow-hidden rounded-xl border border-black/10">
-        <Image
-          src="/redditgrowthos-hero.png"
-          alt=""
-          fill
-          priority
-          sizes="(max-width: 768px) 100vw, 1280px"
-          className="object-cover"
-        />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(10,11,11,0.88)_0%,rgba(18,23,23,0.74)_34%,rgba(20,17,15,0.22)_72%,rgba(20,17,15,0.12)_100%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(217,93,57,0.2),transparent_30%),linear-gradient(180deg,rgba(0,0,0,0)_62%,rgba(0,0,0,0.36)_100%)]" />
-
-        <div className="relative flex min-h-[430px] flex-col justify-between gap-12 p-6 text-white sm:min-h-[520px] sm:p-8 lg:min-h-[610px] lg:p-10">
-          <div className="max-w-3xl pt-10 sm:pt-14 lg:pt-20">
+      <section className="landing-hero overflow-hidden rounded-xl border border-black/10 p-4 sm:p-6 lg:p-8">
+        <div className="grid min-h-[520px] gap-8 lg:grid-cols-[0.78fr_1.22fr] lg:items-center">
+          <div className="max-w-3xl text-white lg:pl-2">
             <span className="inline-flex items-center gap-2 rounded-lg border border-white/18 bg-white/10 px-3 py-2 font-mono text-xs uppercase text-[#f3d8c9] backdrop-blur">
               <BrandMark className="h-6 w-6 shrink-0" />
               Founder-focused Reddit operating system
@@ -117,19 +259,21 @@ export default function Home() {
                 {isClerkConfigured ? "Sign in" : "Preview without auth"}
               </Link>
             </div>
+
+            <div className="mt-8 grid gap-3 sm:grid-cols-3">
+              {proofPoints.map((item) => (
+                <div
+                  key={item}
+                  className="rounded-lg border border-white/16 bg-black/18 p-4 text-sm leading-6 text-[#fffaf3]"
+                >
+                  <CheckCircle2 className="mb-3 h-5 w-5 text-[#f47a2f]" />
+                  {item}
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div className="grid max-w-4xl gap-3 sm:grid-cols-3">
-            {proofPoints.map((item) => (
-              <div
-                key={item}
-                className="rounded-lg border border-white/16 bg-black/28 p-4 text-sm leading-6 text-[#fffaf3] backdrop-blur"
-              >
-                <CheckCircle2 className="mb-3 h-5 w-5 text-[#f47a2f]" />
-                {item}
-              </div>
-            ))}
-          </div>
+          <DashboardPreview />
         </div>
       </section>
 
