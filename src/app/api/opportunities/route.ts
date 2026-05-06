@@ -14,6 +14,25 @@ import {
 
 export const runtime = "nodejs";
 
+function parseKeywordList(value: string) {
+  const seen = new Set<string>();
+  const keywords: string[] = [];
+
+  for (const item of value.split(",")) {
+    const keyword = item.trim();
+    const key = keyword.toLowerCase();
+
+    if (!keyword || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    keywords.push(keyword);
+  }
+
+  return keywords.slice(0, 8);
+}
+
 const discoverySchema = z.object({
   projectId: z.string().trim().cuid().nullable().optional(),
   websiteUrl: z.string().trim().max(2048).optional().default(""),
@@ -23,13 +42,7 @@ const discoverySchema = z.object({
     .string()
     .trim()
     .min(3)
-    .transform((value) =>
-      value
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean)
-        .slice(0, 8),
-    )
+    .transform(parseKeywordList)
     .refine((value) => value.length > 0, "Add at least one keyword."),
 });
 

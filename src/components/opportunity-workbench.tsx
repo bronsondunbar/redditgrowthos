@@ -340,6 +340,9 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
       ) || null,
     [dashboard.currentProjectId, dashboard.projects],
   );
+  const currentProjectFaviconUrl = currentProject?.websiteUrl
+    ? buildFaviconUrl(currentProject.websiteUrl)
+    : null;
   const opportunityById = useMemo(
     () =>
       new Map(
@@ -541,7 +544,14 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
     setPostDrafts(buildPostDraftState(payload.dashboard.postDrafts));
     setReplyDrafts(buildReplyDraftState(payload.dashboard.opportunities));
     setReplyScores(buildReplyScoreState(payload.dashboard.opportunities));
-    router.refresh();
+
+    if (payload.persisted && payload.dashboard.currentProjectId) {
+      router.replace(`/dashboard?project=${payload.dashboard.currentProjectId}`, {
+        scroll: false,
+      });
+    } else {
+      router.refresh();
+    }
   }
 
   async function handleRefreshDiscovery() {
@@ -1393,9 +1403,9 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                   Current project
                 </p>
                 <div className="mt-1 flex min-w-0 items-start gap-3">
-                  {currentProject?.websiteUrl ? (
+                  {currentProjectFaviconUrl ? (
                     <Image
-                      src={buildFaviconUrl(currentProject.websiteUrl) || ""}
+                      src={currentProjectFaviconUrl}
                       alt=""
                       aria-hidden="true"
                       width={28}

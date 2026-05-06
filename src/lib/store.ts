@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { OpportunityStatus } from "@prisma/client";
+import { OpportunityStatus, Prisma } from "@prisma/client";
 
 import {
   isClerkConfigured,
@@ -130,12 +130,16 @@ function toProjectSummary(project: {
     opportunities: number;
   };
 }): ProjectSummary {
+  const lastDiscoveryAt =
+    project.lastDiscoveryAt ||
+    (project._count.opportunities > 0 ? project.updatedAt : null);
+
   return {
     id: project.id,
     name: project.name,
     description: project.description || "",
     websiteUrl: project.websiteUrl || "",
-    lastDiscoveryAt: project.lastDiscoveryAt?.toISOString() || null,
+    lastDiscoveryAt: lastDiscoveryAt?.toISOString() || null,
     keywordCount: project._count.trackedKeywords,
     opportunityCount: project._count.opportunities,
     updatedAt: project.updatedAt.toISOString(),
@@ -368,18 +372,15 @@ export async function runDiscovery(payload: DiscoveryPayload) {
   return buildTransientDashboardState(payload, opportunities);
 }
 
-async function persistProjectDiscovery(input: {
+async function persistProjectDiscoveryRecords(
+  db: Prisma.TransactionClient,
+  input: {
   userId: string;
   projectId: string;
   payload: DiscoveryPayload;
   dashboard: DashboardState;
-}) {
-  const db = prisma;
-
-  if (!db) {
-    return input.dashboard;
-  }
-
+  },
+) {
   const discoveryCompletedAt = new Date();
 
   await db.dailyActionCompletion.deleteMany({
@@ -476,7 +477,19 @@ async function persistProjectDiscovery(input: {
       lastDiscoveryAt: discoveryCompletedAt,
     },
   });
+}
 
+async function persistProjectDiscovery(input: {
+  userId: string;
+  projectId: string;
+  payload: DiscoveryPayload;
+  dashboard: DashboardState;
+}) {
+  if (!prisma) {
+    return input.dashboard;
+  }
+
+  await prisma.$transaction((tx) => persistProjectDiscoveryRecords(tx, input));
   return getDashboardStateForUser(input.userId, input.projectId);
 }
 
@@ -492,39 +505,45 @@ export async function persistDiscovery(
   }
 
   const user = await ensureUser(clerkId);
-  const existingProject = payload.projectId
-    ? await db.project.findFirst({
-        where: {
-          id: payload.projectId,
-          userId: user.id,
-        },
-      })
-    : null;
+  const projectId = await db.$transaction(async (tx) => {
+    const existingProject = payload.projectId
+      ? await tx.project.findFirst({
+          where: {
+            id: payload.projectId,
+            userId: user.id,
+          },
+        })
+      : null;
 
-  const project = existingProject
-    ? await db.project.update({
-        where: { id: existingProject.id },
-        data: {
-          name: payload.productName,
-          description: payload.productDescription,
-          websiteUrl: payload.websiteUrl || null,
-        },
-      })
-    : await db.project.create({
-        data: {
-          userId: user.id,
-          name: payload.productName,
-          description: payload.productDescription,
-          websiteUrl: payload.websiteUrl || null,
-        },
-      });
+    const project = existingProject
+      ? await tx.project.update({
+          where: { id: existingProject.id },
+          data: {
+            name: payload.productName,
+            description: payload.productDescription,
+            websiteUrl: payload.websiteUrl || null,
+          },
+        })
+      : await tx.project.create({
+          data: {
+            userId: user.id,
+            name: payload.productName,
+            description: payload.productDescription,
+            websiteUrl: payload.websiteUrl || null,
+          },
+        });
 
-  return persistProjectDiscovery({
-    userId: user.id,
-    projectId: project.id,
-    payload,
-    dashboard,
+    await persistProjectDiscoveryRecords(tx, {
+      userId: user.id,
+      projectId: project.id,
+      payload,
+      dashboard,
+    });
+
+    return project.id;
   });
+
+  return getDashboardStateForUser(user.id, projectId);
 }
 
 export async function deleteProject(projectId: string, clerkId: string) {
