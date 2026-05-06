@@ -47,6 +47,14 @@ type RedditCommentReplyContext = {
   commentBody: string;
 };
 
+type RedditPostCommentContext = {
+  subreddit: string;
+  postTitle: string;
+  postBody: string;
+  postAuthor: string;
+  topComments: string[];
+};
+
 type DiscoverySearchPlan = {
   query: string;
   matchedKeyword: string;
@@ -456,6 +464,37 @@ function findCommentById(
   return null;
 }
 
+function extractTopCommentSnippets(listing: RedditListing | undefined) {
+  return (listing?.data?.children ?? [])
+    .map((child) => child.data)
+    .filter((comment) => comment?.body && comment.body !== "[deleted]")
+    .sort((left, right) => (right?.score || 0) - (left?.score || 0))
+    .slice(0, 4)
+    .map((comment) => {
+      const author = comment?.author || "unknown";
+      const body = (comment?.body || "").replace(/\s+/g, " ").trim();
+
+      return `u/${author}: ${body.slice(0, 360)}`;
+    });
+}
+
+async function fetchRedditThreadPayload(inputUrl: string, cache: RequestCache) {
+  const normalizedUrl = normalizeRedditThreadUrl(inputUrl);
+  const apiUrl = new URL(normalizedUrl.toString());
+  apiUrl.pathname = `${apiUrl.pathname.replace(/\/$/, "")}.json`;
+
+  const response = await fetch(apiUrl, {
+    headers: redditHeaders,
+    cache,
+  });
+
+  if (!response.ok) {
+    throw new Error("Could not load that Reddit post.");
+  }
+
+  return (await response.json()) as RedditThreadPayload;
+}
+
 export async function fetchTrackedRedditPost(
   inputUrl: string,
 ): Promise<TrackedPostCard> {
@@ -499,21 +538,8 @@ export async function fetchRedditCommentReplyContext(
   postUrlInput: string,
   commentUrlInput: string,
 ): Promise<RedditCommentReplyContext> {
-  const postUrl = normalizeRedditThreadUrl(postUrlInput);
   const commentUrl = normalizeRedditCommentUrl(commentUrlInput);
-  const postApiUrl = new URL(postUrl.toString());
-  postApiUrl.pathname = `${postApiUrl.pathname.replace(/\/$/, "")}.json`;
-
-  const response = await fetch(postApiUrl, {
-    headers: redditHeaders,
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error("Could not load that Reddit post.");
-  }
-
-  const payload = (await response.json()) as RedditThreadPayload;
+  const payload = await fetchRedditThreadPayload(postUrlInput, "no-store");
   const thread = payload[0]?.data?.children?.[0]?.data;
 
   if (!thread?.title || !thread.subreddit) {
@@ -543,6 +569,25 @@ export async function fetchRedditCommentReplyContext(
     postBody: (thread.selftext || "").trim(),
     commentAuthor: comment.author,
     commentBody: comment.body,
+  };
+}
+
+export async function fetchRedditPostCommentContext(
+  postUrlInput: string,
+): Promise<RedditPostCommentContext> {
+  const payload = await fetchRedditThreadPayload(postUrlInput, "no-store");
+  const thread = payload[0]?.data?.children?.[0]?.data;
+
+  if (!thread?.title || !thread.subreddit) {
+    throw new Error("Could not parse that Reddit post.");
+  }
+
+  return {
+    subreddit: thread.subreddit,
+    postTitle: thread.title,
+    postBody: (thread.selftext || "").trim(),
+    postAuthor: thread.author || "unknown",
+    topComments: extractTopCommentSnippets(payload[1] as RedditListing | undefined),
   };
 }
 

@@ -51,7 +51,7 @@ type ProjectFormState = {
 
 type OpportunityFilter = "high" | "low";
 type ReplyStateFilter = "not-replied" | "replied";
-type WorkspaceToolPanel = "drafts" | "reply" | "tracking";
+type WorkspaceToolPanel = "comment" | "drafts" | "reply" | "tracking";
 type PostDraftState = Record<
   string,
   {
@@ -85,6 +85,10 @@ type CommentReplyComposerState = {
   commentUrl: string;
 };
 
+type PostCommentComposerState = {
+  postUrl: string;
+};
+
 type GeneratedCommentReplyState = {
   reply: string;
   softPromotionScore: number;
@@ -92,6 +96,15 @@ type GeneratedCommentReplyState = {
   postTitle: string;
   commentAuthor: string;
   commentBody: string;
+};
+
+type GeneratedPostCommentState = {
+  comment: string;
+  softPromotionScore: number;
+  subreddit: string;
+  postTitle: string;
+  postAuthor: string;
+  postBody: string;
 };
 
 function getDefaultOpportunityFilter(opportunities: OpportunityCard[]) {
@@ -241,6 +254,12 @@ function buildEmptyCommentReplyComposer(): CommentReplyComposerState {
   };
 }
 
+function buildEmptyPostCommentComposer(): PostCommentComposerState {
+  return {
+    postUrl: "",
+  };
+}
+
 export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
   const router = useRouter();
   const isLocalDevelopment = process.env.NODE_ENV !== "production";
@@ -286,12 +305,19 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
   const [deletingPostDraftId, setDeletingPostDraftId] = useState<string | null>(
     null,
   );
+  const [isDeletingProject, setIsDeletingProject] = useState(false);
   const [commentReplyComposer, setCommentReplyComposer] =
     useState<CommentReplyComposerState>(buildEmptyCommentReplyComposer);
+  const [postCommentComposer, setPostCommentComposer] =
+    useState<PostCommentComposerState>(buildEmptyPostCommentComposer);
   const [isGeneratingCommentReply, setIsGeneratingCommentReply] =
+    useState(false);
+  const [isGeneratingPostComment, setIsGeneratingPostComment] =
     useState(false);
   const [generatedCommentReply, setGeneratedCommentReply] =
     useState<GeneratedCommentReplyState | null>(null);
+  const [generatedPostComment, setGeneratedPostComment] =
+    useState<GeneratedPostCommentState | null>(null);
   const [opportunityFilter, setOpportunityFilter] = useState<OpportunityFilter>(
     getDefaultOpportunityFilter(initialState.opportunities),
   );
@@ -1004,6 +1030,99 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
     });
   }
 
+  async function handleDeleteProject() {
+    if (!currentProject) {
+      setError("Select a project before deleting it.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete ${currentProject.name}? This removes its keywords, opportunities, tracked posts, drafts, and completed actions.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setError(null);
+    setNotice(null);
+    setIsDeletingProject(true);
+
+    if (!dashboard.configured.clerk || !dashboard.configured.database) {
+      setDashboard((current) => ({
+        ...current,
+        projects: current.projects.filter(
+          (project) => project.id !== currentProject.id,
+        ),
+        currentProjectId: null,
+        websiteUrl: "",
+        productName: "",
+        productDescription: "",
+        trackedKeywords: [],
+        trackedPosts: [],
+        postDrafts: [],
+        analytics: {
+          totalOpportunities: 0,
+          hotLeads: 0,
+          repliedThreads: 0,
+          safeSubreddits: 0,
+          averageIntent: 0,
+        },
+        actions: [],
+        subreddits: [],
+        opportunities: [],
+      }));
+      setForm(buildEmptyProjectForm());
+      setReplyDrafts({});
+      setReplyScores({});
+      setPostDrafts({});
+      setActivePostDraft(null);
+      setActiveWorkspaceTool(null);
+      setComposerMode("create");
+      setIsDeletingProject(false);
+      setNotice("Project removed locally.");
+      return;
+    }
+
+    const response = await fetch(`/api/projects/${currentProject.id}`, {
+      method: "DELETE",
+    });
+    const payload = (await response.json()) as {
+      dashboard?: DashboardState;
+      error?: string;
+    };
+
+    setIsDeletingProject(false);
+
+    if (!response.ok || !payload.dashboard) {
+      setError(payload.error || "Could not delete that project.");
+      return;
+    }
+
+    setDashboard(payload.dashboard);
+    setForm(buildFormState(payload.dashboard));
+    setOpportunityFilter(
+      getDefaultOpportunityFilter(payload.dashboard.opportunities),
+    );
+    setReplyStateFilter("not-replied");
+    setReplyDrafts(buildReplyDraftState(payload.dashboard.opportunities));
+    setReplyScores(buildReplyScoreState(payload.dashboard.opportunities));
+    setPostDrafts(buildPostDraftState(payload.dashboard.postDrafts));
+    setActivePostDraft(null);
+    setActiveWorkspaceTool(null);
+    setComposerMode(payload.dashboard.currentProjectId ? null : "create");
+    setNotice("Project deleted.");
+
+    const nextPath = payload.dashboard.currentProjectId
+      ? `/dashboard?project=${payload.dashboard.currentProjectId}`
+      : "/dashboard";
+
+    startTransition(() => {
+      router.push(nextPath);
+      router.refresh();
+    });
+  }
+
   async function handleGenerateCommentReply(
     event: React.FormEvent<HTMLFormElement>,
   ) {
@@ -1062,6 +1181,62 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
       commentBody: payload.context.commentBody || "",
     });
     setNotice("Comment reply draft generated.");
+  }
+
+  async function handleGeneratePostComment(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (!postCommentComposer.postUrl.trim()) {
+      setError("Paste a Reddit post URL to draft a comment.");
+      return;
+    }
+
+    setError(null);
+    setNotice(null);
+    setIsGeneratingPostComment(true);
+
+    const response = await fetch("/api/reply", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        productName: form.productName,
+        productDescription: form.productDescription,
+        postUrl: postCommentComposer.postUrl,
+      }),
+    });
+
+    const payload = (await response.json()) as {
+      comment?: string;
+      softPromotionScore?: number;
+      context?: {
+        subreddit?: string;
+        postTitle?: string;
+        postAuthor?: string;
+        postBody?: string;
+      };
+      error?: string;
+    };
+
+    setIsGeneratingPostComment(false);
+
+    if (!response.ok || !payload.comment || !payload.context) {
+      setError(payload.error || "Could not generate a comment for that post.");
+      return;
+    }
+
+    setGeneratedPostComment({
+      comment: payload.comment,
+      softPromotionScore: payload.softPromotionScore ?? 0,
+      subreddit: payload.context.subreddit || "unknown",
+      postTitle: payload.context.postTitle || "Untitled post",
+      postAuthor: payload.context.postAuthor || "unknown",
+      postBody: payload.context.postBody || "",
+    });
+    setNotice("Post comment draft generated.");
   }
 
   return (
@@ -1186,10 +1361,25 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                 </button>
                 <button
                   type="button"
+                  onClick={() => setActiveWorkspaceTool("comment")}
+                  className="app-button app-button-secondary text-sm"
+                >
+                  Comment helper
+                </button>
+                <button
+                  type="button"
                   onClick={() => setActiveWorkspaceTool("tracking")}
                   className="app-button app-button-secondary text-sm"
                 >
                   Tracked posts ({trackedPostTotals.count})
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteProject}
+                  disabled={isDeletingProject}
+                  className="app-button app-button-secondary border-[#b9381d]/30 text-[#b9381d] hover:border-[#b9381d]/50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isDeletingProject ? "Deleting..." : "Delete project"}
                 </button>
               </>
             ) : null}
@@ -1217,14 +1407,16 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                 </a>
               </>
             ) : isLocalDevelopment && currentProject ? (
-              <button
-                type="button"
-                onClick={handleRefreshDiscovery}
-                disabled={isRefreshingDiscovery}
-                className="app-button app-button-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isRefreshingDiscovery ? "Refreshing..." : "Re-run discovery"}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleRefreshDiscovery}
+                  disabled={isRefreshingDiscovery}
+                  className="app-button app-button-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isRefreshingDiscovery ? "Refreshing..." : "Re-run discovery"}
+                </button>
+              </>
             ) : null}
           </div>
         </div>
@@ -1589,6 +1781,125 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
           <button
             type="button"
             aria-label="Close saved drafts"
+            onClick={() => setActiveWorkspaceTool(null)}
+            className="flex-1"
+          />
+        </div>
+      ) : null}
+
+      {activeWorkspaceTool === "comment" ? (
+        <div className="panel-overlay-enter fixed inset-0 z-40 flex justify-end bg-black/28 backdrop-blur-[2px]">
+          <div className="panel-right-enter h-full w-full max-w-2xl overflow-y-auto border-l border-black/10 bg-[#fffdf8] p-6 shadow-xl sm:p-8">
+            <section className="app-panel p-4">
+              <button
+                type="button"
+                aria-label="Close post comment helper"
+                onClick={() => setActiveWorkspaceTool(null)}
+                className="mb-4 rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+              >
+                Close
+              </button>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-[#14110f]">
+                    Post Comment Helper
+                  </h2>
+                  <p className="mt-1 text-sm leading-6 text-[#5b524a]">
+                    Draft a top-level comment for a Reddit post using this
+                    project&apos;s positioning.
+                  </p>
+                </div>
+                {currentProject ? (
+                  <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#6b6258]">
+                    For {currentProject.name}
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="mt-4 rounded-lg border border-black/10 bg-white p-4">
+                <form onSubmit={handleGeneratePostComment} className="grid gap-3">
+                  <label className="grid gap-2 text-sm font-medium text-[#2f2a26]">
+                    Post URL
+                    <input
+                      value={postCommentComposer.postUrl}
+                      onChange={(event) =>
+                        setPostCommentComposer({
+                          postUrl: event.target.value,
+                        })
+                      }
+                      className="rounded-lg border border-black/10 bg-white px-3 py-2 outline-none transition focus:border-[#d95d39]"
+                      placeholder="https://www.reddit.com/r/subreddit/comments/..."
+                    />
+                  </label>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="submit"
+                      disabled={isGeneratingPostComment}
+                      className="rounded-md bg-[#d95d39] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#bf4f30] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isGeneratingPostComment
+                        ? "Drafting..."
+                        : "Draft comment"}
+                    </button>
+                    {generatedPostComment ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          copyDraftToClipboard(
+                            "generated-post-comment",
+                            generatedPostComment.comment,
+                            "Post comment",
+                          )
+                        }
+                        className="rounded-md border border-black/10 px-4 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                      >
+                        {copiedDraftKey === "generated-post-comment"
+                          ? "Copied"
+                          : "Copy comment"}
+                      </button>
+                    ) : null}
+                  </div>
+                </form>
+
+                {generatedPostComment ? (
+                  <div className="mt-4 rounded-lg border border-[#155e63]/18 bg-[#edf6f6] p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-md border border-[#155e63]/20 bg-white/70 px-2 py-1 text-xs text-[#155e63]">
+                        r/{generatedPostComment.subreddit}
+                      </span>
+                      <span className="rounded-md border border-[#155e63]/20 bg-white/70 px-2 py-1 text-xs text-[#155e63]">
+                        Soft-promo score{" "}
+                        {generatedPostComment.softPromotionScore}
+                      </span>
+                    </div>
+                    <p className="mt-4 text-sm font-semibold text-[#14110f]">
+                      {generatedPostComment.postTitle}
+                    </p>
+                    <p className="mt-3 text-sm leading-6 text-[#1f3133]">
+                      Post from u/{generatedPostComment.postAuthor}
+                    </p>
+                    {generatedPostComment.postBody ? (
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#4f4740]">
+                        {generatedPostComment.postBody}
+                      </p>
+                    ) : null}
+                    <div className="mt-4 rounded-lg border border-white/50 bg-white/70 p-4">
+                      <p className="font-mono text-xs uppercase tracking-normal text-[#155e63]">
+                        Drafted comment
+                      </p>
+                      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#1f3133]">
+                        {generatedPostComment.comment}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </section>
+          </div>
+          <button
+            type="button"
+            aria-label="Close post comment helper"
             onClick={() => setActiveWorkspaceTool(null)}
             className="flex-1"
           />

@@ -512,6 +512,26 @@ export async function persistDiscovery(
   });
 }
 
+export async function deleteProject(projectId: string, clerkId: string) {
+  if (!prisma) {
+    return null;
+  }
+
+  const user = await ensureUser(clerkId);
+  const result = await prisma.project.deleteMany({
+    where: {
+      id: projectId,
+      userId: user.id,
+    },
+  });
+
+  if (result.count === 0) {
+    return null;
+  }
+
+  return getDashboardStateForUser(user.id);
+}
+
 export async function refreshProjectDiscovery(
   projectId: string,
   userId: string,

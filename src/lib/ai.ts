@@ -21,6 +21,16 @@ type CommentReplyInput = {
   commentBody: string;
 };
 
+type PostCommentInput = {
+  productName: string;
+  productDescription: string;
+  subreddit: string;
+  postTitle: string;
+  postBody: string;
+  postAuthor: string;
+  topComments: string[];
+};
+
 type PostDraftInput = {
   productName: string;
   productDescription: string;
@@ -110,6 +120,12 @@ function buildFallbackReply(input: ReplyInput) {
 
 function buildFallbackCommentReply(input: CommentReplyInput) {
   return `Thanks for the thoughtful comment. My quick take is that ${input.productDescription.toLowerCase()} works best when the workflow stays simple first and the manual steps are clear before adding more tooling. We are building ${input.productName}, but the useful part here is usually defining one repeatable process and tightening that before anything else. If helpful, what part of this has been the hardest to do consistently on your side?`;
+}
+
+function buildFallbackPostComment(input: PostCommentInput) {
+  const context = input.postBody || input.postTitle;
+
+  return `This is a useful thread. The part I would pressure-test first is whether the workflow around ${context.toLowerCase()} is repeatable before adding more tools or process. We are building ${input.productName}, and the pattern we keep seeing is that ${input.productDescription.toLowerCase()} works best when the team names the manual bottleneck clearly first. Curious what you have already tried here?`;
 }
 
 function buildFallbackPost(input: PostDraftInput) {
@@ -232,6 +248,51 @@ export async function generateCommentReplySuggestion(input: CommentReplyInput) {
     return {
       reply: fallbackReply,
       softPromotionScore: computeSoftPromotionScore(fallbackReply),
+      source: "template" as const,
+    };
+  }
+}
+
+export async function generatePostCommentSuggestion(input: PostCommentInput) {
+  const fallbackComment = buildFallbackPostComment(input);
+
+  if (!openai) {
+    return {
+      comment: fallbackComment,
+      softPromotionScore: computeSoftPromotionScore(fallbackComment),
+      source: "template" as const,
+    };
+  }
+
+  try {
+    const response = await openai.responses.create({
+      model: openAiModel,
+      input: [
+        {
+          role: "system",
+          content:
+            "You write concise Reddit comments for founders joining an existing thread. Be specific to the post, lead with useful advice, avoid hype, keep self-promotion minimal, and never use em dashes or en dashes - use a normal hyphen instead.",
+        },
+        {
+          role: "user",
+          content: `Subreddit: r/${input.subreddit}\nPost author: u/${input.postAuthor}\nPost title: ${input.postTitle}\nPost body: ${input.postBody || "(no body text)"}\nTop comments for context:\n${input.topComments.length ? input.topComments.map((comment, index) => `${index + 1}. ${comment}`).join("\n") : "(none loaded)"}\n\nProduct: ${input.productName}\nProduct description: ${input.productDescription}\n\nWrite a 3-5 sentence top-level comment for this Reddit post. Respond to the actual thread, add one concrete insight or question, avoid sounding like a pitch, and mention the product only if it feels natural after the value is already clear. Do not include links. Use only normal hyphens "-" for punctuation, never em dashes or en dashes.`,
+        },
+      ],
+    });
+
+    const comment = normalizeDashes(
+      response.output_text?.trim() || fallbackComment,
+    );
+
+    return {
+      comment,
+      softPromotionScore: computeSoftPromotionScore(comment),
+      source: "ai" as const,
+    };
+  } catch {
+    return {
+      comment: fallbackComment,
+      softPromotionScore: computeSoftPromotionScore(fallbackComment),
       source: "template" as const,
     };
   }

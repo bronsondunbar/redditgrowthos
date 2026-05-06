@@ -5,9 +5,13 @@ import { z } from "zod";
 import { isClerkConfigured, isDatabaseConfigured } from "@/lib/config";
 import {
   generateCommentReplySuggestion,
+  generatePostCommentSuggestion,
   generateReplySuggestion,
 } from "@/lib/ai";
-import { fetchRedditCommentReplyContext } from "@/lib/reddit";
+import {
+  fetchRedditCommentReplyContext,
+  fetchRedditPostCommentContext,
+} from "@/lib/reddit";
 import { saveReplyDraft } from "@/lib/store";
 
 const opportunityReplySchema = z.object({
@@ -26,6 +30,12 @@ const commentReplySchema = z.object({
   commentUrl: z.string().trim().url(),
 });
 
+const postCommentSchema = z.object({
+  productName: z.string().trim().min(2).max(80),
+  productDescription: z.string().trim().min(12).max(500),
+  postUrl: z.string().trim().url(),
+});
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -37,6 +47,21 @@ export async function POST(request: Request) {
         payload.commentUrl,
       );
       const result = await generateCommentReplySuggestion({
+        productName: payload.productName,
+        productDescription: payload.productDescription,
+        ...context,
+      });
+
+      return NextResponse.json({
+        ...result,
+        context,
+      });
+    }
+
+    if ("postUrl" in body) {
+      const payload = postCommentSchema.parse(body);
+      const context = await fetchRedditPostCommentContext(payload.postUrl);
+      const result = await generatePostCommentSuggestion({
         productName: payload.productName,
         productDescription: payload.productDescription,
         ...context,
