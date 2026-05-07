@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -12,6 +13,26 @@ import {
 
 import { BrandMark } from "@/components/brand-mark";
 import { isClerkConfigured } from "@/lib/config";
+
+export const metadata: Metadata = {
+  title: "Reddit Demand Discovery for Founders",
+  description:
+    "Find live buyer intent on Reddit, prioritize the right threads, and turn daily conversations into a repeatable growth workflow.",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    title: "Reddit Demand Discovery for Founders",
+    description:
+      "Find live buyer intent on Reddit, prioritize the right threads, and turn daily conversations into a repeatable growth workflow.",
+    url: "/",
+  },
+  twitter: {
+    title: "Reddit Demand Discovery for Founders",
+    description:
+      "Find live buyer intent on Reddit, prioritize the right threads, and turn daily conversations into a repeatable growth workflow.",
+  },
+};
 
 const proofPoints = [
   "Intent-ranked Reddit threads",

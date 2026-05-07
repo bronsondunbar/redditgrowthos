@@ -1,6 +1,16 @@
+import type { Metadata } from "next";
 import { SignUp } from "@clerk/nextjs";
 
 import { isClerkConfigured } from "@/lib/config";
+
+export const metadata: Metadata = {
+  title: "Sign Up",
+  description: "Create a RedditGrowthOS account to start tracking live Reddit demand.",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default function SignUpPage() {
   if (!isClerkConfigured) {

@@ -4,6 +4,32 @@ export const appConfig = {
     "Find customer conversations on Reddit and turn them into a daily execution plan.",
 };
 
+const defaultSiteUrl = "http://localhost:3002";
+
+function normalizeSiteUrl(value: string | undefined) {
+  if (!value) {
+    return defaultSiteUrl;
+  }
+
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return defaultSiteUrl;
+  }
+
+  if (trimmedValue.startsWith("http://") || trimmedValue.startsWith("https://")) {
+    return trimmedValue;
+  }
+
+  return `https://${trimmedValue}`;
+}
+
+export const siteUrl = normalizeSiteUrl(
+  process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ||
+    process.env.VERCEL_URL,
+);
+
 export const isClerkConfigured = Boolean(
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY,
 );

@@ -1,6 +1,16 @@
+import type { Metadata } from "next";
 import { SignIn } from "@clerk/nextjs";
 
 import { isClerkConfigured } from "@/lib/config";
+
+export const metadata: Metadata = {
+  title: "Sign In",
+  description: "Sign in to RedditGrowthOS to access your Reddit opportunity workspace.",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default function SignInPage() {
   if (!isClerkConfigured) {
