@@ -1,6 +1,22 @@
 # RedditGrowthOS
 
-RedditGrowthOS is a Next.js App Router workspace for finding live Reddit demand, prioritizing reply opportunities, tracking published Reddit posts, and sending a daily execution digest.
+RedditGrowthOS is an open-source Next.js App Router app for finding live Reddit demand, prioritizing reply opportunities, tracking published Reddit posts, and sending a daily execution digest.
+
+## Why I Open Sourced It
+
+I started building this to help market and generate leads for [ReplyRadar](https://usereplyradar.com/), but that work led to a better product direction. Rather than keep the original internal tool private, I decided to open source it.
+
+[![Buy me a $5 coffee](https://img.shields.io/badge/Buy%20me%20a%20%245%20coffee-support-black?style=for-the-badge)](http://google.com)
+
+> I started working on a tool to help market and get leads for my other projects, but it led to inspiration for a better tool and so I decided to open source it. The tool is called RedditGrowthOS and you can find it here: [this repository](.)
+
+## What It Does
+
+- Creates a multi-project Reddit workspace for products, offers, and campaigns.
+- Turns a site URL into an AI-assisted product summary and discovery keyword set.
+- Discovers Reddit threads, scores them for relevance and risk, and keeps an action-oriented inbox.
+- Tracks published Reddit posts and stores refreshable performance metrics.
+- Builds a daily plan with one post plus two reply opportunities and can email that plan on a schedule.
 
 ## Stack
 
@@ -8,26 +24,40 @@ RedditGrowthOS is a Next.js App Router workspace for finding live Reddit demand,
 - React 19
 - Tailwind CSS 4
 - Clerk for auth
-- Prisma + Postgres/Neon
-- OpenAI for site intake enrichment, relevance reranking, and reply drafting
-- Resend for daily digest emails
-- Vercel cron for scheduled email delivery
+- Prisma with Postgres or Neon
+- OpenAI for site intake enrichment, reranking, and drafting
+- Resend for daily digest delivery
+- Vercel cron for scheduled execution
 
-## Core Features
+## Quick Start
 
-- Multi-project Reddit workspace
-- Website URL intake with AI-assisted product summary and keyword expansion
-- Reddit opportunity discovery with intent/risk scoring
-- Opportunity inbox with save, unsave, replied, and dismiss workflow states
-- Daily action cards for one post plus two replies
-- Tracked Reddit posts section for published-post metrics
-- Daily email digest with Today's 3 actions and top tracked posts per project
+1. Install dependencies.
+2. Copy `.env.example` to `.env`.
+3. Fill in the services you want to enable.
+4. Generate Prisma client artifacts.
+5. Run migrations.
+6. Start the dev server.
+
+```bash
+npm install
+cp .env.example .env
+npm run db:generate
+npm run db:migrate
+npm run dev
+```
+
+The app runs on `http://localhost:3002` by default.
+
+## Preview Mode
+
+The app can boot without every external service configured. If Clerk, `DATABASE_URL`, or `OPENAI_API_KEY` are missing, the UI still renders in a reduced preview mode so you can inspect the product surface before wiring up auth, persistence, and AI-backed flows.
 
 ## Environment Variables
 
-Copy [/.env.example](/Users/bronsondunbar/Sites/projects/redditgrowthos/.env.example) to [/.env](/Users/bronsondunbar/Sites/projects/redditgrowthos/.env) and fill in the values:
+Use `.env.example` as the only committed template. Keep real secrets in your local `.env` file or in your deployment provider's secret store.
 
 ```env
+NEXT_PUBLIC_SITE_URL="http://localhost:3002"
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=""
 CLERK_SECRET_KEY=""
 DATABASE_URL=""
@@ -44,63 +74,55 @@ CRON_SECRET=""
 
 Notes:
 
-- `DATABASE_URL` should use Neon's pooled connection string for app traffic on Vercel.
-- `DIRECT_URL` should use the non-pooled Neon connection string for Prisma migrations.
+- `NEXT_PUBLIC_SITE_URL` is optional locally and defaults to `http://localhost:3002`.
+- `DATABASE_URL` should use Neon's pooled connection string for runtime traffic.
+- `DIRECT_URL` should use the non-pooled connection string for Prisma migrations.
 - `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, and `REDDIT_USER_AGENT` should be set for authenticated Reddit discovery in production. Anonymous Reddit search is unreliable from Vercel and may return `403`.
-- `RESEND_FROM_EMAIL` must be a sender identity verified in Resend.
-- `CRON_SECRET` is used to protect the cron endpoint. Generate one with `openssl rand -base64 32`.
+- `RESEND_FROM_EMAIL` must be a verified sender identity in Resend.
+- `CRON_SECRET` protects the cron endpoint. Generate one with `openssl rand -base64 32`.
 
 ## Reddit API Setup
 
-Reddit discovery in production uses Reddit OAuth with the `client_credentials` flow. That means you need a confidential Reddit app with a client ID, client secret, and a specific user agent.
+Production discovery uses Reddit OAuth with the `client_credentials` flow. You need a confidential Reddit app with a client ID, client secret, and a stable user agent.
 
 1. Sign in to the Reddit account that should own the app.
 2. Open `https://www.reddit.com/prefs/apps`.
 3. Click `create an app` or `create another app`.
-4. Give the app a name like `RedditGrowthOS`.
-5. Choose a confidential app type. A `web app` works for this setup.
-6. If Reddit requires a redirect URI, use a placeholder you control such as `http://localhost:3000/api/reddit/callback`. This project does not currently use the redirect URI, but Reddit may still require one during app registration.
+4. Give the app a name such as `RedditGrowthOS`.
+5. Choose a confidential app type. A `web app` works for this project.
+6. If Reddit requires a redirect URI, use a placeholder you control such as `http://localhost:3002/api/reddit/callback`.
 7. Save the app.
 
-Map the Reddit app values like this:
+Map the values like this:
 
 - `REDDIT_CLIENT_ID`: the short ID shown under the app name
 - `REDDIT_CLIENT_SECRET`: the value labeled `secret`
-- `REDDIT_USER_AGENT`: a unique descriptive string for your app, for example `web:redditgrowthos:v0.1 (by /u/your_reddit_username)`
+- `REDDIT_USER_AGENT`: a descriptive string such as `web:redditgrowthos:v0.1 (by /u/your_reddit_username)`
 
-Recommended setup notes:
+## Daily Digest Cron
 
-- Keep the client secret only in server-side env vars such as local `.env` and Vercel project settings.
-- Use a real Reddit username in the user agent when possible.
-- Add the same Reddit env vars to both local development and Vercel if you want discovery behavior to match across environments.
+Vercel cron is configured in `vercel.json` to call `/api/cron/daily-digest` once per day at `09:00` UTC.
 
-## Local Development
+The route:
 
-Install dependencies:
+- loads each user's projects
+- builds Today's 3 actions from live opportunities
+- selects the top tracked posts per project
+- sends the digest with Resend
 
-```bash
-npm install
+It expects this header:
+
+```http
+Authorization: Bearer <CRON_SECRET>
 ```
 
-Generate the Prisma client:
+## Deployment Notes
 
-```bash
-npm run db:generate
-```
-
-Run migrations locally:
-
-```bash
-npm run db:migrate
-```
-
-Start the dev server:
-
-```bash
-npm run dev
-```
-
-Open `http://localhost:3000`.
+- Deploy on Vercel.
+- Add all application secrets in Vercel project settings rather than committing them.
+- Set the Vercel build command to `npm run build:vercel` so deploys apply Prisma migrations before building.
+- Set `DATABASE_URL` to the pooled connection and `DIRECT_URL` to the direct connection.
+- Configure Clerk, Postgres, and Resend before enabling the cron route in production.
 
 ## Useful Scripts
 
@@ -113,54 +135,19 @@ npm run db:migrate
 npm run db:migrate:deploy
 ```
 
-## Daily Digest Cron
-
-Vercel cron is configured in [vercel.json](/Users/bronsondunbar/Sites/projects/redditgrowthos/vercel.json):
-
-```json
-{
-  "crons": [
-    {
-      "path": "/api/cron/daily-digest",
-      "schedule": "0 9 * * *"
-    }
-  ]
-}
-```
-
-This triggers the digest once per day at `09:00` UTC.
-
-The cron route:
-
-- loads each user's projects
-- builds Today's 3 actions from live opportunities
-- selects the top 3 tracked posts per project
-- sends the digest with Resend
-
-The route is protected with `CRON_SECRET` and expects:
-
-```http
-Authorization: Bearer <CRON_SECRET>
-```
-
-## Deployment Notes
-
-- Deploy on Vercel.
-- Add all environment variables in the Vercel project settings.
-- Set the Vercel build command to `npm run build:vercel` so deploys apply Prisma migrations before building.
-- Set `DATABASE_URL` to the pooled Neon URL and `DIRECT_URL` to the direct Neon URL.
-- Create a Reddit app and set `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, and a specific `REDDIT_USER_AGENT` in Vercel before relying on discovery in production.
-- Make sure Clerk, Postgres, and Resend are all configured before enabling the cron.
-
-## Current Data Model Highlights
+## Data Model Highlights
 
 - `Project`: workspace container for each product
 - `TrackedKeyword`: discovery terms per project
 - `Opportunity`: discovered Reddit threads and workflow state
 - `TrackedPost`: published Reddit posts with stored metrics and refresh support
 
-## Operational Notes
+## Security
 
-- Discovery filters out moderator-removed Reddit posts when Reddit exposes removal signals.
-- Discovery reruns prune stale `NEW` and `SAVED` opportunities that no longer come back from Reddit.
-- Tracked post metrics can be refreshed from the dashboard.
+- Real secrets are intentionally excluded from the repository.
+- `.env` files are gitignored; only `.env.example` is meant to be committed.
+- If you ever commit a credential by mistake, rotate it first and then clean the Git history before publishing the repository.
+
+## License
+
+This project is licensed under the MIT License. See `LICENSE`.
