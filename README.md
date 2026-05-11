@@ -8,8 +8,6 @@ I started building this to help market and generate leads for [ReplyRadar](https
 
 [![Buy me a $5 coffee](https://img.shields.io/badge/Buy%20me%20a%20%245%20coffee-support-black?style=for-the-badge)](https://checkout.dodopayments.com/buy/pdt_0NeazWMM2PHMjod5JbkcB?quantity=1)
 
-> I started working on a tool to help market and get leads for my other projects, but it led to inspiration for a better tool and so I decided to open source it. The tool is called RedditGrowthOS and you can find it here: [this repository](.)
-
 ## What It Does
 
 - Creates a multi-project Reddit workspace for products, offers, and campaigns.
