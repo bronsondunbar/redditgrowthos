@@ -67,6 +67,7 @@ const refreshDiscoverySchema = z.object({
 const refreshAllDiscoverySchema = z.object({
   scope: z.literal("all"),
   selectedProjectId: z.string().trim().cuid().nullable().optional(),
+  discoveryMode: z.enum(["AI_ASSISTED", "REDDIT_API"]).optional(),
 });
 
 export async function POST(request: Request) {
@@ -160,6 +161,7 @@ export async function PATCH(request: Request) {
       const dashboard = await refreshAllProjectDiscoveries(
         user.id,
         allProjectsPayload.data.selectedProjectId,
+        allProjectsPayload.data.discoveryMode,
       );
 
       if (!dashboard) {
@@ -173,10 +175,7 @@ export async function PATCH(request: Request) {
     }
 
     const payload = refreshDiscoverySchema.parse(body);
-    const dashboard = await refreshProjectDiscovery(
-      payload.projectId,
-      user.id,
-    );
+    const dashboard = await refreshProjectDiscovery(payload.projectId, user.id);
 
     if (!dashboard) {
       return NextResponse.json(

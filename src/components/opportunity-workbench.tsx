@@ -339,8 +339,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
     useState<PostCommentComposerState>(buildEmptyPostCommentComposer);
   const [isGeneratingCommentReply, setIsGeneratingCommentReply] =
     useState(false);
-  const [isGeneratingPostComment, setIsGeneratingPostComment] =
-    useState(false);
+  const [isGeneratingPostComment, setIsGeneratingPostComment] = useState(false);
   const [generatedCommentReply, setGeneratedCommentReply] =
     useState<GeneratedCommentReplyState | null>(null);
   const [generatedPostComment, setGeneratedPostComment] =
@@ -582,9 +581,12 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
     setReplyScores(buildReplyScoreState(payload.dashboard.opportunities));
 
     if (payload.persisted && payload.dashboard.currentProjectId) {
-      router.replace(`/dashboard?project=${payload.dashboard.currentProjectId}`, {
-        scroll: false,
-      });
+      router.replace(
+        `/dashboard?project=${payload.dashboard.currentProjectId}`,
+        {
+          scroll: false,
+        },
+      );
     } else {
       router.refresh();
     }
@@ -635,14 +637,16 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
     router.refresh();
   }
 
-  async function handleRefreshAllDiscoveries() {
+  async function handleRefreshAllDiscoveries(discoveryMode: DiscoveryMode) {
     if (!dashboard.projects.length) {
       setError("Create a project before rerunning discovery.");
       return;
     }
 
     if (!dashboard.configured.clerk || !dashboard.configured.database) {
-      setError("Configure Clerk + Neon before rerunning all project discovery.");
+      setError(
+        "Configure Clerk + Neon before rerunning all project discovery.",
+      );
       return;
     }
 
@@ -658,6 +662,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
       body: JSON.stringify({
         scope: "all",
         selectedProjectId: dashboard.currentProjectId,
+        discoveryMode,
       }),
     });
 
@@ -682,7 +687,9 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
     setPostDrafts(buildPostDraftState(payload.dashboard.postDrafts));
     setReplyDrafts(buildReplyDraftState(payload.dashboard.opportunities));
     setReplyScores(buildReplyScoreState(payload.dashboard.opportunities));
-    setNotice("Discovery rerun completed for all projects.");
+    setNotice(
+      `Discovery rerun completed for all projects using ${formatDiscoveryMode(discoveryMode).toLowerCase()}.`,
+    );
     router.refresh();
   }
 
@@ -775,7 +782,9 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
     setIsSavingProfile(false);
 
     if (!response.ok || !payload.excludedSubreddits) {
-      setError(payload.error || "Could not update the Reddit account settings.");
+      setError(
+        payload.error || "Could not update the Reddit account settings.",
+      );
       return;
     }
 
@@ -1468,16 +1477,39 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
           >
             Edit selected
           </button>
-          <button
-            type="button"
-            onClick={handleRefreshAllDiscoveries}
-            disabled={!dashboard.projects.length || isRefreshingAllDiscovery}
-            className="mt-2 w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50"
+          <details
+            className={`relative mt-2 ${!dashboard.projects.length || isRefreshingAllDiscovery ? "pointer-events-none opacity-50" : ""}`}
           >
-            {isRefreshingAllDiscovery
-              ? "Refreshing all..."
-              : "Re-run all discovery"}
-          </button>
+            <summary className="w-full cursor-pointer list-none rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5">
+              {isRefreshingAllDiscovery
+                ? "Refreshing all..."
+                : "Re-run all discovery"}
+            </summary>
+            <div className="absolute left-0 right-0 z-20 mt-2 grid gap-1 rounded-lg border border-black/10 bg-white p-2 shadow-lg">
+              <button
+                type="button"
+                onClick={() => handleRefreshAllDiscoveries("AI_ASSISTED")}
+                disabled={
+                  !dashboard.configured.openAi || isRefreshingAllDiscovery
+                }
+                className="rounded-md px-3 py-2 text-left text-sm font-semibold text-[#14110f] transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Re-run all with AI-assisted
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRefreshAllDiscoveries("REDDIT_API")}
+                disabled={isRefreshingAllDiscovery}
+                className="rounded-md px-3 py-2 text-left text-sm font-semibold text-[#14110f] transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Re-run all with Reddit APIs only
+              </button>
+            </div>
+          </details>
+          <p className="mt-2 text-xs leading-5 text-[#6b6258]">
+            Pick the mode for this rerun. The selected mode is saved back to
+            each project.
+          </p>
 
           <div className="mt-4 rounded-lg border border-black/10 bg-white p-3">
             <p className="font-mono text-xs uppercase tracking-normal text-[#8b8278]">
@@ -1537,7 +1569,9 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                 </p>
                 {currentProject ? (
                   <div className="mt-3 flex flex-wrap gap-2 text-xs text-[#6b6258]">
-                    <span>{formatLastDiscoveryAt(currentProject.lastDiscoveryAt)}</span>
+                    <span>
+                      {formatLastDiscoveryAt(currentProject.lastDiscoveryAt)}
+                    </span>
                     <span>·</span>
                     <span>
                       Mode: {formatDiscoveryMode(currentProject.discoveryMode)}
@@ -1623,1183 +1657,1200 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
               ) : null}
             </div>
 
-        {currentProject ? (
-          <div className="mt-4 grid gap-2 border-t border-black/10 pt-4 sm:grid-cols-5">
-            {metricCards.map((metric) => (
-              <div key={metric.key}>
-                <p className="text-xs text-[#6b6258]">{metric.label}</p>
-                <p className="mt-1 text-xl font-semibold text-[#14110f]">
-                  {dashboard.analytics[metric.key]}
-                </p>
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        {error ? <p className="mt-4 text-sm text-[#b9381d]">{error}</p> : null}
-        {notice ? (
-          <p className="mt-4 text-sm text-[#155e63]">{notice}</p>
-        ) : null}
-      </section>
-
-      <section className="app-panel p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-[#14110f]">
-              Today&apos;s 3 actions
-            </h2>
-          </div>
-          <div className="flex flex-wrap gap-2">
             {currentProject ? (
-              <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#6b6258]">
-                {currentProject.name}
-              </span>
-            ) : null}
-            {dashboard.demoMode ? (
-              <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#6b6258]">
-                Preview
-              </span>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="mt-4 max-w-full overflow-x-auto pb-1">
-          {hasActions ? (
-            <div className="flex w-max min-w-full gap-2 pr-2">
-              {dashboard.actions.map((action) => {
-                const submitUrl =
-                  action.submitUrl || buildSubredditSubmitPath(action.subreddit);
-                const linkedOpportunity = action.opportunityId
-                  ? opportunityById.get(action.opportunityId)
-                  : null;
-                const isSaved = linkedOpportunity
-                  ? isSavedStatus(linkedOpportunity.status)
-                  : false;
-                const actionReplyDraft = linkedOpportunity
-                  ? replyDrafts[linkedOpportunity.id]
-                  : null;
-                const actionReplyScore = linkedOpportunity
-                  ? (replyScores[linkedOpportunity.id] ?? 0)
-                  : 0;
-
-                return (
-                  <div
-                    key={action.id}
-                    className="flex min-h-[11rem] w-[20rem] shrink-0 flex-col rounded-lg border border-black/10 bg-white p-4 sm:w-[28rem]"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-medium uppercase tracking-normal text-[#6b6258]">
-                          {action.type} · {action.priority}
-                        </p>
-                        <h3 className="mt-1 line-clamp-2 text-base font-semibold text-[#14110f]">
-                          {action.title}
-                        </h3>
-                      </div>
-                      <span className="shrink-0 rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#6b6258]">
-                        r/{action.subreddit}
-                      </span>
-                    </div>
-                    <p className="mt-3 line-clamp-2 text-sm leading-6 text-[#4f4740]">
-                      {action.summary}
+              <div className="mt-4 grid gap-2 border-t border-black/10 pt-4 sm:grid-cols-5">
+                {metricCards.map((metric) => (
+                  <div key={metric.key}>
+                    <p className="text-xs text-[#6b6258]">{metric.label}</p>
+                    <p className="mt-1 text-xl font-semibold text-[#14110f]">
+                      {dashboard.analytics[metric.key]}
                     </p>
-                    <div className="mt-auto flex flex-wrap gap-2 pt-4">
-                      {action.type === "COMMENT" ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleActionReply(action.opportunityId)
-                            }
-                            disabled={
-                              !action.opportunityId ||
-                              busyOpportunityId === action.opportunityId
-                            }
-                            className="rounded-md bg-[#d95d39] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#bf4f30] disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {busyOpportunityId === action.opportunityId
-                              ? "Drafting..."
-                              : "Draft reply"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => completeTodayAction(action)}
-                            disabled={completingActionId === action.id}
-                            className="rounded-md border border-[#155e63]/25 px-3 py-2 text-sm font-semibold text-[#155e63] transition hover:bg-[#edf6f6] disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {completingActionId === action.id
-                              ? "Completing..."
-                              : "Complete"}
-                          </button>
-                          <details className="relative">
-                            <summary className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5 cursor-pointer list-none">
-                              More
-                            </summary>
-                            <div className="absolute bottom-full left-0 z-20 mb-2 grid min-w-44 gap-1 rounded-lg border border-black/10 bg-white p-2">
-                              {action.permalink ? (
-                                <a
-                                  href={action.permalink}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="rounded-md px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
-                                >
-                                  Open thread
-                                </a>
-                              ) : null}
-                              {action.opportunityId ? (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      updateWorkflow(
-                                        action.opportunityId!,
-                                        isSaved ? "NEW" : "SAVED",
-                                      )
-                                    }
-                                    className="rounded-md px-3 py-2 text-left text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
-                                  >
-                                    {isSaved ? "Unsave thread" : "Save thread"}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      updateWorkflow(
-                                        action.opportunityId!,
-                                        "REPLIED",
-                                      )
-                                    }
-                                    className="rounded-md px-3 py-2 text-left text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
-                                  >
-                                    Mark replied
-                                  </button>
-                                </>
-                              ) : null}
-                            </div>
-                          </details>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleActionPostDraft({
-                                id: action.id,
-                                subreddit: action.subreddit,
-                                summary: action.summary,
-                                riskNote: action.riskNote,
-                              })
-                            }
-                            disabled={busyPostActionId === action.id}
-                            className="rounded-md bg-[#d95d39] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#bf4f30] disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {busyPostActionId === action.id
-                              ? "Drafting..."
-                              : "Draft post"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => completeTodayAction(action)}
-                            disabled={completingActionId === action.id}
-                            className="rounded-md border border-[#155e63]/25 px-3 py-2 text-sm font-semibold text-[#155e63] transition hover:bg-[#edf6f6] disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {completingActionId === action.id
-                              ? "Completing..."
-                              : "Complete"}
-                          </button>
-                          <details className="relative">
-                            <summary className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5 cursor-pointer list-none">
-                              More
-                            </summary>
-                            <div className="absolute bottom-full left-0 z-20 mb-2 grid min-w-40 gap-1 rounded-lg border border-black/10 bg-white p-2">
-                              <a
-                                href={submitUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="rounded-md px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
-                              >
-                                Create post
-                              </a>
-                              {postDrafts[action.id] ? (
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {error ? (
+              <p className="mt-4 text-sm text-[#b9381d]">{error}</p>
+            ) : null}
+            {notice ? (
+              <p className="mt-4 text-sm text-[#155e63]">{notice}</p>
+            ) : null}
+          </section>
+
+          <section className="app-panel p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-[#14110f]">
+                  Today&apos;s 3 actions
+                </h2>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {currentProject ? (
+                  <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#6b6258]">
+                    {currentProject.name}
+                  </span>
+                ) : null}
+                {dashboard.demoMode ? (
+                  <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#6b6258]">
+                    Preview
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="mt-4 max-w-full overflow-x-auto pb-1">
+              {hasActions ? (
+                <div className="flex w-max min-w-full gap-2 pr-2">
+                  {dashboard.actions.map((action) => {
+                    const submitUrl =
+                      action.submitUrl ||
+                      buildSubredditSubmitPath(action.subreddit);
+                    const linkedOpportunity = action.opportunityId
+                      ? opportunityById.get(action.opportunityId)
+                      : null;
+                    const isSaved = linkedOpportunity
+                      ? isSavedStatus(linkedOpportunity.status)
+                      : false;
+                    const actionReplyDraft = linkedOpportunity
+                      ? replyDrafts[linkedOpportunity.id]
+                      : null;
+                    const actionReplyScore = linkedOpportunity
+                      ? (replyScores[linkedOpportunity.id] ?? 0)
+                      : 0;
+
+                    return (
+                      <div
+                        key={action.id}
+                        className="flex min-h-[11rem] w-[20rem] shrink-0 flex-col rounded-lg border border-black/10 bg-white p-4 sm:w-[28rem]"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-medium uppercase tracking-normal text-[#6b6258]">
+                              {action.type} · {action.priority}
+                            </p>
+                            <h3 className="mt-1 line-clamp-2 text-base font-semibold text-[#14110f]">
+                              {action.title}
+                            </h3>
+                          </div>
+                          <span className="shrink-0 rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#6b6258]">
+                            r/{action.subreddit}
+                          </span>
+                        </div>
+                        <p className="mt-3 line-clamp-2 text-sm leading-6 text-[#4f4740]">
+                          {action.summary}
+                        </p>
+                        <div className="mt-auto flex flex-wrap gap-2 pt-4">
+                          {action.type === "COMMENT" ? (
+                            <>
                               <button
                                 type="button"
                                 onClick={() =>
-                                  openPostDraftPanel({
-                                    actionKey: action.id,
+                                  handleActionReply(action.opportunityId)
+                                }
+                                disabled={
+                                  !action.opportunityId ||
+                                  busyOpportunityId === action.opportunityId
+                                }
+                                className="rounded-md bg-[#d95d39] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#bf4f30] disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {busyOpportunityId === action.opportunityId
+                                  ? "Drafting..."
+                                  : "Draft reply"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => completeTodayAction(action)}
+                                disabled={completingActionId === action.id}
+                                className="rounded-md border border-[#155e63]/25 px-3 py-2 text-sm font-semibold text-[#155e63] transition hover:bg-[#edf6f6] disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {completingActionId === action.id
+                                  ? "Completing..."
+                                  : "Complete"}
+                              </button>
+                              <details className="relative">
+                                <summary className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5 cursor-pointer list-none">
+                                  More
+                                </summary>
+                                <div className="absolute bottom-full left-0 z-20 mb-2 grid min-w-44 gap-1 rounded-lg border border-black/10 bg-white p-2">
+                                  {action.permalink ? (
+                                    <a
+                                      href={action.permalink}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="rounded-md px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                                    >
+                                      Open thread
+                                    </a>
+                                  ) : null}
+                                  {action.opportunityId ? (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          updateWorkflow(
+                                            action.opportunityId!,
+                                            isSaved ? "NEW" : "SAVED",
+                                          )
+                                        }
+                                        className="rounded-md px-3 py-2 text-left text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                                      >
+                                        {isSaved
+                                          ? "Unsave thread"
+                                          : "Save thread"}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          updateWorkflow(
+                                            action.opportunityId!,
+                                            "REPLIED",
+                                          )
+                                        }
+                                        className="rounded-md px-3 py-2 text-left text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                                      >
+                                        Mark replied
+                                      </button>
+                                    </>
+                                  ) : null}
+                                </div>
+                              </details>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleActionPostDraft({
+                                    id: action.id,
                                     subreddit: action.subreddit,
-                                    title: postDrafts[action.id].title,
-                                    body: postDrafts[action.id].body,
-                                    rules: postDrafts[action.id].rules,
-                                    review: postDrafts[action.id].review,
+                                    summary: action.summary,
+                                    riskNote: action.riskNote,
                                   })
                                 }
-                                className="rounded-md px-3 py-2 text-left text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                                disabled={busyPostActionId === action.id}
+                                className="rounded-md bg-[#d95d39] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#bf4f30] disabled:cursor-not-allowed disabled:opacity-60"
                               >
-                                View draft
+                                {busyPostActionId === action.id
+                                  ? "Drafting..."
+                                  : "Draft post"}
                               </button>
-                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => completeTodayAction(action)}
+                                disabled={completingActionId === action.id}
+                                className="rounded-md border border-[#155e63]/25 px-3 py-2 text-sm font-semibold text-[#155e63] transition hover:bg-[#edf6f6] disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {completingActionId === action.id
+                                  ? "Completing..."
+                                  : "Complete"}
+                              </button>
+                              <details className="relative">
+                                <summary className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5 cursor-pointer list-none">
+                                  More
+                                </summary>
+                                <div className="absolute bottom-full left-0 z-20 mb-2 grid min-w-40 gap-1 rounded-lg border border-black/10 bg-white p-2">
+                                  <a
+                                    href={submitUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="rounded-md px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                                  >
+                                    Create post
+                                  </a>
+                                  {postDrafts[action.id] ? (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        openPostDraftPanel({
+                                          actionKey: action.id,
+                                          subreddit: action.subreddit,
+                                          title: postDrafts[action.id].title,
+                                          body: postDrafts[action.id].body,
+                                          rules: postDrafts[action.id].rules,
+                                          review: postDrafts[action.id].review,
+                                        })
+                                      }
+                                      className="rounded-md px-3 py-2 text-left text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                                    >
+                                      View draft
+                                    </button>
+                                  ) : null}
+                                </div>
+                              </details>
+                            </>
+                          )}
+                        </div>
+                        {action.type === "COMMENT" &&
+                        linkedOpportunity &&
+                        actionReplyDraft ? (
+                          <div className="mt-4 max-h-80 overflow-y-auto rounded-lg border border-[#155e63]/20 bg-[#edf6f6] p-4">
+                            <div className="flex items-center justify-between gap-4">
+                              <div>
+                                <p className="font-mono text-xs uppercase tracking-normal text-[#155e63]">
+                                  Reply draft
+                                </p>
+                                <p className="mt-1 text-xs text-[#155e63]">
+                                  Soft-promo score: {actionReplyScore}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  copyDraftToClipboard(
+                                    `action-reply:${linkedOpportunity.id}`,
+                                    actionReplyDraft,
+                                    "Reply draft",
+                                  )
+                                }
+                                className="shrink-0 rounded-md border border-[#155e63]/20 px-2 py-1 text-xs font-semibold text-[#155e63] transition hover:bg-[#155e63]/10"
+                              >
+                                {copiedDraftKey ===
+                                `action-reply:${linkedOpportunity.id}`
+                                  ? "Copied"
+                                  : "Copy draft"}
+                              </button>
                             </div>
-                          </details>
-                        </>
-                      )}
-                    </div>
-                    {action.type === "COMMENT" &&
-                    linkedOpportunity &&
-                    actionReplyDraft ? (
-                      <div className="mt-4 max-h-80 overflow-y-auto rounded-lg border border-[#155e63]/20 bg-[#edf6f6] p-4">
-                        <div className="flex items-center justify-between gap-4">
-                          <div>
-                            <p className="font-mono text-xs uppercase tracking-normal text-[#155e63]">
-                              Reply draft
-                            </p>
-                            <p className="mt-1 text-xs text-[#155e63]">
-                              Soft-promo score: {actionReplyScore}
+                            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#1f3133]">
+                              {actionReplyDraft}
                             </p>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              copyDraftToClipboard(
-                                `action-reply:${linkedOpportunity.id}`,
-                                actionReplyDraft,
-                                "Reply draft",
-                              )
-                            }
-                            className="shrink-0 rounded-md border border-[#155e63]/20 px-2 py-1 text-xs font-semibold text-[#155e63] transition hover:bg-[#155e63]/10"
-                          >
-                            {copiedDraftKey ===
-                            `action-reply:${linkedOpportunity.id}`
-                              ? "Copied"
-                              : "Copy draft"}
-                          </button>
-                        </div>
-                        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#1f3133]">
-                          {actionReplyDraft}
-                        </p>
+                        ) : null}
                       </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="w-full rounded-lg border border-black/10 bg-white p-4 text-sm leading-6 text-[#5b524a]">
-              No strong project-matched actions are available right now. Run
-              discovery again after tuning the project keywords.
-            </div>
-          )}
-        </div>
-      </section>
-
-      {activeWorkspaceTool === "drafts" ? (
-        <div className="panel-overlay-enter fixed inset-0 z-40 flex justify-end bg-black/28 backdrop-blur-[2px]">
-          <div className="panel-right-enter h-full w-full max-w-3xl overflow-y-auto border-l border-black/10 bg-[#fffdf8] p-6 shadow-xl sm:p-8">
-            <section className="app-panel p-4">
-              <button
-                type="button"
-                aria-label="Close saved drafts"
-                onClick={() => setActiveWorkspaceTool(null)}
-                className="mb-4 rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
-              >
-                Close
-              </button>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-[#14110f]">
-              Saved drafts
-            </h2>
-          </div>
-          {currentProject ? (
-            <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#6b6258]">
-              {dashboard.postDrafts.length} saved
-            </span>
-          ) : null}
-        </div>
-
-        <div className="mt-4 grid gap-3 lg:grid-cols-2">
-          {hasSavedPostDrafts ? (
-            dashboard.postDrafts.map((postDraft) => (
-              <article
-                key={postDraft.id}
-                className="rounded-lg border border-black/10 bg-white p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-normal text-[#8b8278]">
-                      r/{postDraft.subreddit}
-                    </p>
-                    <h3 className="mt-1 line-clamp-2 text-base font-semibold text-[#14110f]">
-                      {postDraft.title}
-                    </h3>
-                  </div>
-                  <span className="shrink-0 text-xs text-[#6b6258]">
-                    {formatDateTime(postDraft.updatedAt)}
-                  </span>
-                </div>
-                <p className="mt-3 line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-[#4f4740]">
-                  {postDraft.body}
-                </p>
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#6b6258]">
-                    {postDraft.review.verdict}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      openPostDraftPanel({
-                        actionKey: postDraft.actionKey,
-                        subreddit: postDraft.subreddit,
-                        title: postDraft.title,
-                        body: postDraft.body,
-                        rules: postDraft.rules,
-                        review: postDraft.review,
-                        updatedAt: postDraft.updatedAt,
-                      })
-                    }
-                    className="rounded-md border border-black/10 px-2 py-1 text-xs font-semibold text-[#14110f] transition hover:bg-black/5"
-                  >
-                    View draft
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      copyDraftToClipboard(
-                        `saved-post:${postDraft.actionKey}`,
-                        `${postDraft.title}\n\n${postDraft.body}`,
-                        "Post draft",
-                      )
-                    }
-                    className="rounded-md border border-black/10 px-2 py-1 text-xs font-semibold text-[#14110f] transition hover:bg-black/5"
-                  >
-                    {copiedDraftKey === `saved-post:${postDraft.actionKey}`
-                      ? "Copied"
-                      : "Copy draft"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeletePostDraft(postDraft)}
-                    disabled={deletingPostDraftId === postDraft.id}
-                    className="rounded-md border border-black/10 px-2 py-1 text-xs font-semibold text-[#14110f] transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {deletingPostDraftId === postDraft.id
-                      ? "Deleting..."
-                      : "Delete draft"}
-                  </button>
-                  <a
-                    href={buildSubredditSubmitPath(postDraft.subreddit)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-md border border-black/10 px-2 py-1 text-xs font-semibold text-[#14110f] transition hover:bg-black/5"
-                  >
-                    Open submit
-                  </a>
-                </div>
-              </article>
-            ))
-          ) : (
-            <div className="rounded-lg border border-black/10 bg-white p-4 text-sm leading-6 text-[#5b524a] lg:col-span-2">
-              Draft a subreddit-native post and it will stay here for this
-              project even if the action card changes later.
-            </div>
-          )}
-        </div>
-            </section>
-          </div>
-          <button
-            type="button"
-            aria-label="Close saved drafts"
-            onClick={() => setActiveWorkspaceTool(null)}
-            className="flex-1"
-          />
-        </div>
-      ) : null}
-
-      {activeWorkspaceTool === "comment" ? (
-        <div className="panel-overlay-enter fixed inset-0 z-40 flex justify-end bg-black/28 backdrop-blur-[2px]">
-          <div className="panel-right-enter h-full w-full max-w-2xl overflow-y-auto border-l border-black/10 bg-[#fffdf8] p-6 shadow-xl sm:p-8">
-            <section className="app-panel p-4">
-              <button
-                type="button"
-                aria-label="Close post reply helper"
-                onClick={() => setActiveWorkspaceTool(null)}
-                className="mb-4 rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
-              >
-                Close
-              </button>
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold text-[#14110f]">
-                    Post Reply Helper
-                  </h2>
-                  <p className="mt-1 text-sm leading-6 text-[#5b524a]">
-                    Draft a top-level reply for a Reddit post using this
-                    project&apos;s positioning.
-                  </p>
-                </div>
-                {currentProject ? (
-                  <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#6b6258]">
-                    For {currentProject.name}
-                  </span>
-                ) : null}
-              </div>
-
-              <div className="mt-4 rounded-lg border border-black/10 bg-white p-4">
-                <form onSubmit={handleGeneratePostComment} className="grid gap-3">
-                  <label className="grid gap-2 text-sm font-medium text-[#2f2a26]">
-                    Post URL
-                    <input
-                      value={postCommentComposer.postUrl}
-                      onChange={(event) =>
-                        setPostCommentComposer({
-                          postUrl: event.target.value,
-                        })
-                      }
-                      className="rounded-lg border border-black/10 bg-white px-3 py-2 outline-none transition focus:border-[#d95d39]"
-                      placeholder="https://www.reddit.com/r/subreddit/comments/..."
-                    />
-                  </label>
-
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      type="submit"
-                      disabled={isGeneratingPostComment}
-                      className="rounded-md bg-[#d95d39] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#bf4f30] disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isGeneratingPostComment
-                        ? "Drafting..."
-                        : "Draft post reply"}
-                    </button>
-                    {generatedPostComment ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          copyDraftToClipboard(
-                            "generated-post-comment",
-                            generatedPostComment.comment,
-                            "Post comment",
-                          )
-                        }
-                        className="rounded-md border border-black/10 px-4 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
-                      >
-                        {copiedDraftKey === "generated-post-comment"
-                          ? "Copied"
-                          : "Copy comment"}
-                      </button>
-                    ) : null}
-                  </div>
-                </form>
-
-                {generatedPostComment ? (
-                  <div className="mt-4 rounded-lg border border-[#155e63]/18 bg-[#edf6f6] p-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-md border border-[#155e63]/20 bg-white/70 px-2 py-1 text-xs text-[#155e63]">
-                        r/{generatedPostComment.subreddit}
-                      </span>
-                      <span className="rounded-md border border-[#155e63]/20 bg-white/70 px-2 py-1 text-xs text-[#155e63]">
-                        Soft-promo score{" "}
-                        {generatedPostComment.softPromotionScore}
-                      </span>
-                    </div>
-                    <p className="mt-4 text-sm font-semibold text-[#14110f]">
-                      {generatedPostComment.postTitle}
-                    </p>
-                    <p className="mt-3 text-sm leading-6 text-[#1f3133]">
-                      Post from u/{generatedPostComment.postAuthor}
-                    </p>
-                    {generatedPostComment.postBody ? (
-                      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#4f4740]">
-                        {generatedPostComment.postBody}
-                      </p>
-                    ) : null}
-                    <div className="mt-4 rounded-lg border border-white/50 bg-white/70 p-4">
-                      <p className="font-mono text-xs uppercase tracking-normal text-[#155e63]">
-                        Drafted comment
-                      </p>
-                      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#1f3133]">
-                        {generatedPostComment.comment}
-                      </p>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </section>
-          </div>
-          <button
-            type="button"
-            aria-label="Close post reply helper"
-            onClick={() => setActiveWorkspaceTool(null)}
-            className="flex-1"
-          />
-        </div>
-      ) : null}
-
-      {activeWorkspaceTool === "reply" ? (
-        <div className="panel-overlay-enter fixed inset-0 z-40 flex justify-end bg-black/28 backdrop-blur-[2px]">
-          <div className="panel-right-enter h-full w-full max-w-2xl overflow-y-auto border-l border-black/10 bg-[#fffdf8] p-6 shadow-xl sm:p-8">
-            <section className="app-panel p-4">
-              <button
-                type="button"
-                aria-label="Close comment reply helper"
-                onClick={() => setActiveWorkspaceTool(null)}
-                className="mb-4 rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
-              >
-                Close
-              </button>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-[#14110f]">
-              Comment Reply Helper
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-[#5b524a]">
-              Draft from a pasted Reddit comment, or review replies started from
-              today&apos;s action cards.
-            </p>
-          </div>
-          {currentProject ? (
-            <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#6b6258]">
-              For {currentProject.name}
-            </span>
-          ) : null}
-        </div>
-
-        <div className="mt-4 rounded-lg border border-black/10 bg-white p-4">
-          <form
-            onSubmit={handleGenerateCommentReply}
-            className="grid gap-3"
-          >
-            <label className="grid gap-2 text-sm font-medium text-[#2f2a26]">
-              Post URL
-              <input
-                value={commentReplyComposer.postUrl}
-                onChange={(event) =>
-                  setCommentReplyComposer((current) => ({
-                    ...current,
-                    postUrl: event.target.value,
-                  }))
-                }
-                className="rounded-lg border border-black/10 bg-white px-3 py-2 outline-none transition focus:border-[#d95d39]"
-                placeholder="https://www.reddit.com/r/subreddit/comments/..."
-              />
-            </label>
-
-            <label className="grid gap-2 text-sm font-medium text-[#2f2a26]">
-              Comment URL
-              <input
-                value={commentReplyComposer.commentUrl}
-                onChange={(event) =>
-                  setCommentReplyComposer((current) => ({
-                    ...current,
-                    commentUrl: event.target.value,
-                  }))
-                }
-                className="rounded-lg border border-black/10 bg-white px-3 py-2 outline-none transition focus:border-[#d95d39]"
-                placeholder="https://www.reddit.com/r/subreddit/comments/.../comment_id/"
-              />
-            </label>
-
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="submit"
-                disabled={isGeneratingCommentReply}
-                className="rounded-md bg-[#d95d39] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#bf4f30] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isGeneratingCommentReply
-                  ? "Drafting..."
-                  : "Draft reply to comment"}
-              </button>
-              {generatedCommentReply ? (
-                <button
-                  type="button"
-                  onClick={() =>
-                    copyDraftToClipboard(
-                      "generated-comment-reply",
-                      generatedCommentReply.reply,
-                      "Comment reply",
-                    )
-                  }
-                  className="rounded-md border border-black/10 px-4 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
-                >
-                  {copiedDraftKey === "generated-comment-reply"
-                    ? "Copied"
-                    : "Copy reply"}
-                </button>
-              ) : null}
-            </div>
-          </form>
-
-          {generatedCommentReply ? (
-            <div className="mt-4 rounded-lg border border-[#155e63]/18 bg-[#edf6f6] p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-md border border-[#155e63]/20 bg-white/70 px-2 py-1 text-xs text-[#155e63]">
-                  r/{generatedCommentReply.subreddit}
-                </span>
-                <span className="rounded-md border border-[#155e63]/20 bg-white/70 px-2 py-1 text-xs text-[#155e63]">
-                  Soft-promo score {generatedCommentReply.softPromotionScore}
-                </span>
-              </div>
-              <p className="mt-4 text-sm font-semibold text-[#14110f]">
-                {generatedCommentReply.postTitle}
-              </p>
-              <p className="mt-3 text-sm leading-6 text-[#1f3133]">
-                Comment from u/{generatedCommentReply.commentAuthor}
-              </p>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#4f4740]">
-                {generatedCommentReply.commentBody}
-              </p>
-              <div className="mt-4 rounded-lg border border-white/50 bg-white/70 p-4">
-                <p className="font-mono text-xs uppercase tracking-normal text-[#155e63]">
-                  Drafted reply
-                </p>
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#1f3133]">
-                  {generatedCommentReply.reply}
-                </p>
-              </div>
-            </div>
-          ) : null}
-        </div>
-            </section>
-          </div>
-          <button
-            type="button"
-            aria-label="Close comment reply helper"
-            onClick={() => setActiveWorkspaceTool(null)}
-            className="flex-1"
-          />
-        </div>
-      ) : null}
-
-      {activePostDraft ? (
-        <div className="panel-overlay-enter fixed inset-0 z-40 flex justify-start bg-black/28 backdrop-blur-[2px]">
-          <div className="panel-left-enter h-full w-full max-w-xl overflow-y-auto border-r border-black/10 bg-[#fffdf8] p-6 shadow-xl sm:p-8">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="font-mono text-xs uppercase tracking-normal text-[#8b8278]">
-                  Post draft
-                </p>
-                <h2 className="mt-1 text-xl font-semibold text-[#14110f]">
-                  r/{activePostDraft.subreddit}
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={closePostDraftPanel}
-                className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#5b524a]">
-                {activePostDraft.review.verdict}
-              </span>
-              {activePostDraft.updatedAt ? (
-                <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#5b524a]">
-                  Updated {formatDateTime(activePostDraft.updatedAt)}
-                </span>
-              ) : null}
-            </div>
-
-            <div className="mt-4 space-y-4 rounded-lg border border-black/10 bg-white p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="font-mono text-xs uppercase tracking-normal text-[#8b8278]">
-                  Draft content
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      copyDraftToClipboard(
-                        `post:${activePostDraft.actionKey}`,
-                        `${activePostDraft.title}\n\n${activePostDraft.body}`,
-                        "Post draft",
-                      )
-                    }
-                    className="rounded-md border border-black/10 px-2 py-1 text-xs font-semibold text-[#14110f] transition hover:bg-black/5"
-                  >
-                    {copiedDraftKey === `post:${activePostDraft.actionKey}`
-                      ? "Copied"
-                      : "Copy draft"}
-                  </button>
-                  <a
-                    href={buildSubredditSubmitPath(activePostDraft.subreddit)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-md border border-black/10 px-2 py-1 text-xs font-semibold text-[#14110f] transition hover:bg-black/5"
-                  >
-                    Open submit
-                  </a>
-                </div>
-              </div>
-              <p className="text-lg font-semibold text-[#14110f]">
-                {activePostDraft.title}
-              </p>
-              <p className="whitespace-pre-wrap text-sm leading-6 text-[#4f4740]">
-                {activePostDraft.body}
-              </p>
-            </div>
-
-            <div className="mt-4 rounded-lg border border-black/10 bg-white p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="font-mono text-xs uppercase tracking-normal text-[#8b8278]">
-                  Rules review
-                </p>
-                <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#5b524a]">
-                  {activePostDraft.review.verdict}
-                </span>
-              </div>
-              <p className="mt-3 text-sm leading-6 text-[#4f4740]">
-                {activePostDraft.review.summary}
-              </p>
-              {activePostDraft.review.issues.length ? (
-                <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-[#4f4740]">
-                  {activePostDraft.review.issues.map((issue) => (
-                    <li key={issue}>{issue}</li>
-                  ))}
-                </ul>
-              ) : null}
-              {activePostDraft.rules.length ? (
-                <div className="mt-4">
-                  <p className="font-mono text-xs uppercase tracking-normal text-[#8b8278]">
-                    Fetched subreddit rules
-                  </p>
-                  <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-[#4f4740]">
-                    {activePostDraft.rules.map((rule) => (
-                      <li key={rule}>{rule}</li>
-                    ))}
-                  </ul>
+                    );
+                  })}
                 </div>
               ) : (
-                <p className="mt-3 text-sm leading-6 text-[#5b524a]">
-                  Could not fetch subreddit rules automatically. Verify the
-                  rules manually before posting.
-                </p>
+                <div className="w-full rounded-lg border border-black/10 bg-white p-4 text-sm leading-6 text-[#5b524a]">
+                  No strong project-matched actions are available right now. Run
+                  discovery again after tuning the project keywords.
+                </div>
               )}
             </div>
-          </div>
-          <button
-            type="button"
-            aria-label="Close post draft panel"
-            onClick={closePostDraftPanel}
-            className="flex-1"
-          />
-        </div>
-      ) : null}
+          </section>
 
-      <section className="grid gap-4 lg:grid-cols-[minmax(0,0.62fr)_minmax(0,1.38fr)]">
-        <div className="app-panel min-w-0 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-[#14110f]">
-                Subreddit radar
-              </h2>
-            </div>
-          </div>
-
-          <div className="mt-4 max-h-[32rem] space-y-2 overflow-y-auto pr-1">
-            {hasSubreddits ? (
-              dashboard.subreddits.map((subreddit) => (
-                <div
-                  key={subreddit.name}
-                  className="min-w-0 rounded-lg border border-black/10 bg-white p-3"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="break-words text-sm font-semibold text-[#14110f]">
-                        r/{subreddit.name}
-                      </h3>
-                      <p className="mt-1 text-xs text-[#6b6258]">
-                        {subreddit.promoTag}
-                      </p>
+          {activeWorkspaceTool === "drafts" ? (
+            <div className="panel-overlay-enter fixed inset-0 z-40 flex justify-end bg-black/28 backdrop-blur-[2px]">
+              <div className="panel-right-enter h-full w-full max-w-3xl overflow-y-auto border-l border-black/10 bg-[#fffdf8] p-6 shadow-xl sm:p-8">
+                <section className="app-panel p-4">
+                  <button
+                    type="button"
+                    aria-label="Close saved drafts"
+                    onClick={() => setActiveWorkspaceTool(null)}
+                    className="mb-4 rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                  >
+                    Close
+                  </button>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-lg font-semibold text-[#14110f]">
+                        Saved drafts
+                      </h2>
                     </div>
-                    <div className="shrink-0 text-right text-xs text-[#5b524a]">
-                      <div>{subreddit.mentions} threads</div>
-                      <div>{subreddit.engagementScore} engagement</div>
-                    </div>
+                    {currentProject ? (
+                      <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#6b6258]">
+                        {dashboard.postDrafts.length} saved
+                      </span>
+                    ) : null}
                   </div>
-                  <div className="mt-3 h-1.5 rounded-full bg-black/6">
-                    <div
-                      className="h-1.5 rounded-full bg-[#155e63]"
-                      style={{
-                        width: `${Math.max(8, subreddit.averageIntent)}%`,
-                      }}
-                    />
-                  </div>
-                  <p className="mt-2 text-xs text-[#5b524a]">
-                    Average intent score: {subreddit.averageIntent}
-                  </p>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-lg border border-black/10 bg-white p-4 text-sm leading-6 text-[#5b524a]">
-                Subreddit matches will appear here after you run a keyword
-                discovery search.
-              </div>
-            )}
-          </div>
-        </div>
 
-        <div className="app-panel min-w-0 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-[#14110f]">
-                Opportunity inbox
-              </h2>
-            </div>
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-[#5b524a]">Filter:</span>
-            <button
-              type="button"
-              onClick={() => setOpportunityFilter("high")}
-              className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${
-                opportunityFilter === "high"
-                  ? "bg-[#14110f] text-white"
-                  : "border border-black/10 text-[#14110f] hover:bg-black/5"
-              }`}
-            >
-              High ({opportunityCounts.high})
-            </button>
-            <button
-              type="button"
-              onClick={() => setOpportunityFilter("low")}
-              className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${
-                opportunityFilter === "low"
-                  ? "bg-[#14110f] text-white"
-                  : "border border-black/10 text-[#14110f] hover:bg-black/5"
-              }`}
-            >
-              Low ({opportunityCounts.low})
-            </button>
-            <span className="ml-2 text-sm font-medium text-[#5b524a]">
-              Reply:
-            </span>
-            <button
-              type="button"
-              onClick={() => setReplyStateFilter("not-replied")}
-              className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${
-                replyStateFilter === "not-replied"
-                  ? "bg-[#14110f] text-white"
-                  : "border border-black/10 text-[#14110f] hover:bg-black/5"
-              }`}
-            >
-              Not replied ({opportunityCounts.notReplied})
-            </button>
-            <button
-              type="button"
-              onClick={() => setReplyStateFilter("replied")}
-              className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${
-                replyStateFilter === "replied"
-                  ? "bg-[#14110f] text-white"
-                  : "border border-black/10 text-[#14110f] hover:bg-black/5"
-              }`}
-            >
-              Replied ({opportunityCounts.replied})
-            </button>
-          </div>
-
-          <div className="mt-4 max-h-[32rem] space-y-3 overflow-y-auto pr-1">
-            {hasOpportunities ? (
-              visibleOpportunities.map((opportunity) =>
-                (() => {
-                  const isSaved = isSavedStatus(opportunity.status);
-
-                  return (
-                    <article
-                      key={opportunity.id}
-                      className="min-w-0 overflow-hidden rounded-lg border border-black/10 bg-white p-4"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          <span className="max-w-full break-words rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#6f675f]">
-                            {opportunity.keyword}
-                          </span>
-                          <span className="rounded-md border border-black/10 px-2 py-1 text-xs text-[#5b524a]">
-                            r/{opportunity.subreddit}
-                          </span>
-                          <span className="rounded-md border border-black/10 px-2 py-1 text-xs text-[#5b524a]">
-                            {opportunity.status}
-                          </span>
-                        </div>
-
-                        <div className="shrink-0 flex items-center gap-2 text-xs text-[#5b524a]">
-                          <span>Intent {opportunity.intentScore}</span>
-                          <span>Risk {opportunity.riskScore}</span>
-                          <span>{opportunity.commentsCount} comments</span>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
-                        <h3 className="min-w-0 flex-1 break-words text-base font-semibold text-[#14110f]">
-                          <a
-                            href={opportunity.permalink}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="block break-words hover:text-[#155e63]"
-                          >
-                            {opportunity.title}
-                          </a>
-                        </h3>
-                        <a
-                          href={opportunity.permalink}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-md border border-black/10 bg-white px-2 py-1 text-xs font-semibold text-[#155e63] transition hover:border-[#155e63]/30 hover:bg-[#155e63]/5"
+                  <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                    {hasSavedPostDrafts ? (
+                      dashboard.postDrafts.map((postDraft) => (
+                        <article
+                          key={postDraft.id}
+                          className="rounded-lg border border-black/10 bg-white p-4"
                         >
-                          Open on Reddit
-                        </a>
-                      </div>
-                      <p className="mt-3 line-clamp-3 break-words text-sm leading-6 text-[#4f4740]">
-                        {opportunity.excerpt ||
-                          "No post body was returned for this thread."}
-                      </p>
-
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => generateReply(opportunity)}
-                          disabled={busyOpportunityId === opportunity.id}
-                          className="rounded-md bg-[#d95d39] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#bf4f30] disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {busyOpportunityId === opportunity.id
-                            ? "Drafting..."
-                            : "Draft reply"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            updateWorkflow(
-                              opportunity.id,
-                              isSaved ? "NEW" : "SAVED",
-                            )
-                          }
-                          className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
-                        >
-                          {isSaved ? "Unsave" : "Save"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            updateWorkflow(opportunity.id, "REPLIED")
-                          }
-                          className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
-                        >
-                          Mark replied
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            updateWorkflow(opportunity.id, "DISMISSED")
-                          }
-                          className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
-                        >
-                          Dismiss
-                        </button>
-                      </div>
-
-                      {replyDrafts[opportunity.id] ? (
-                        <div className="mt-4 rounded-lg border border-[#155e63]/20 bg-[#edf6f6] p-4">
-                          <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-start justify-between gap-3">
                             <div>
-                              <p className="font-mono text-xs uppercase tracking-normal text-[#155e63]">
-                                Reply draft
+                              <p className="text-xs font-medium uppercase tracking-normal text-[#8b8278]">
+                                r/{postDraft.subreddit}
                               </p>
-                              <p className="mt-1 text-xs text-[#155e63]">
-                                Soft-promo score:{" "}
-                                {replyScores[opportunity.id] ?? 0}
-                              </p>
+                              <h3 className="mt-1 line-clamp-2 text-base font-semibold text-[#14110f]">
+                                {postDraft.title}
+                              </h3>
                             </div>
+                            <span className="shrink-0 text-xs text-[#6b6258]">
+                              {formatDateTime(postDraft.updatedAt)}
+                            </span>
+                          </div>
+                          <p className="mt-3 line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-[#4f4740]">
+                            {postDraft.body}
+                          </p>
+                          <div className="mt-4 flex flex-wrap items-center gap-2">
+                            <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#6b6258]">
+                              {postDraft.review.verdict}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openPostDraftPanel({
+                                  actionKey: postDraft.actionKey,
+                                  subreddit: postDraft.subreddit,
+                                  title: postDraft.title,
+                                  body: postDraft.body,
+                                  rules: postDraft.rules,
+                                  review: postDraft.review,
+                                  updatedAt: postDraft.updatedAt,
+                                })
+                              }
+                              className="rounded-md border border-black/10 px-2 py-1 text-xs font-semibold text-[#14110f] transition hover:bg-black/5"
+                            >
+                              View draft
+                            </button>
                             <button
                               type="button"
                               onClick={() =>
                                 copyDraftToClipboard(
-                                  `reply:${opportunity.id}`,
-                                  replyDrafts[opportunity.id],
-                                  "Reply draft",
+                                  `saved-post:${postDraft.actionKey}`,
+                                  `${postDraft.title}\n\n${postDraft.body}`,
+                                  "Post draft",
                                 )
                               }
-                              className="rounded-md border border-[#155e63]/20 px-2 py-1 text-xs font-semibold text-[#155e63] transition hover:bg-[#155e63]/10"
+                              className="rounded-md border border-black/10 px-2 py-1 text-xs font-semibold text-[#14110f] transition hover:bg-black/5"
                             >
-                              {copiedDraftKey === `reply:${opportunity.id}`
+                              {copiedDraftKey ===
+                              `saved-post:${postDraft.actionKey}`
                                 ? "Copied"
                                 : "Copy draft"}
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePostDraft(postDraft)}
+                              disabled={deletingPostDraftId === postDraft.id}
+                              className="rounded-md border border-black/10 px-2 py-1 text-xs font-semibold text-[#14110f] transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {deletingPostDraftId === postDraft.id
+                                ? "Deleting..."
+                                : "Delete draft"}
+                            </button>
+                            <a
+                              href={buildSubredditSubmitPath(
+                                postDraft.subreddit,
+                              )}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-md border border-black/10 px-2 py-1 text-xs font-semibold text-[#14110f] transition hover:bg-black/5"
+                            >
+                              Open submit
+                            </a>
                           </div>
+                        </article>
+                      ))
+                    ) : (
+                      <div className="rounded-lg border border-black/10 bg-white p-4 text-sm leading-6 text-[#5b524a] lg:col-span-2">
+                        Draft a subreddit-native post and it will stay here for
+                        this project even if the action card changes later.
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </div>
+              <button
+                type="button"
+                aria-label="Close saved drafts"
+                onClick={() => setActiveWorkspaceTool(null)}
+                className="flex-1"
+              />
+            </div>
+          ) : null}
+
+          {activeWorkspaceTool === "comment" ? (
+            <div className="panel-overlay-enter fixed inset-0 z-40 flex justify-end bg-black/28 backdrop-blur-[2px]">
+              <div className="panel-right-enter h-full w-full max-w-2xl overflow-y-auto border-l border-black/10 bg-[#fffdf8] p-6 shadow-xl sm:p-8">
+                <section className="app-panel p-4">
+                  <button
+                    type="button"
+                    aria-label="Close post reply helper"
+                    onClick={() => setActiveWorkspaceTool(null)}
+                    className="mb-4 rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                  >
+                    Close
+                  </button>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-lg font-semibold text-[#14110f]">
+                        Post Reply Helper
+                      </h2>
+                      <p className="mt-1 text-sm leading-6 text-[#5b524a]">
+                        Draft a top-level reply for a Reddit post using this
+                        project&apos;s positioning.
+                      </p>
+                    </div>
+                    {currentProject ? (
+                      <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#6b6258]">
+                        For {currentProject.name}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-4 rounded-lg border border-black/10 bg-white p-4">
+                    <form
+                      onSubmit={handleGeneratePostComment}
+                      className="grid gap-3"
+                    >
+                      <label className="grid gap-2 text-sm font-medium text-[#2f2a26]">
+                        Post URL
+                        <input
+                          value={postCommentComposer.postUrl}
+                          onChange={(event) =>
+                            setPostCommentComposer({
+                              postUrl: event.target.value,
+                            })
+                          }
+                          className="rounded-lg border border-black/10 bg-white px-3 py-2 outline-none transition focus:border-[#d95d39]"
+                          placeholder="https://www.reddit.com/r/subreddit/comments/..."
+                        />
+                      </label>
+
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="submit"
+                          disabled={isGeneratingPostComment}
+                          className="rounded-md bg-[#d95d39] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#bf4f30] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isGeneratingPostComment
+                            ? "Drafting..."
+                            : "Draft post reply"}
+                        </button>
+                        {generatedPostComment ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              copyDraftToClipboard(
+                                "generated-post-comment",
+                                generatedPostComment.comment,
+                                "Post comment",
+                              )
+                            }
+                            className="rounded-md border border-black/10 px-4 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                          >
+                            {copiedDraftKey === "generated-post-comment"
+                              ? "Copied"
+                              : "Copy comment"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </form>
+
+                    {generatedPostComment ? (
+                      <div className="mt-4 rounded-lg border border-[#155e63]/18 bg-[#edf6f6] p-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-md border border-[#155e63]/20 bg-white/70 px-2 py-1 text-xs text-[#155e63]">
+                            r/{generatedPostComment.subreddit}
+                          </span>
+                          <span className="rounded-md border border-[#155e63]/20 bg-white/70 px-2 py-1 text-xs text-[#155e63]">
+                            Soft-promo score{" "}
+                            {generatedPostComment.softPromotionScore}
+                          </span>
+                        </div>
+                        <p className="mt-4 text-sm font-semibold text-[#14110f]">
+                          {generatedPostComment.postTitle}
+                        </p>
+                        <p className="mt-3 text-sm leading-6 text-[#1f3133]">
+                          Post from u/{generatedPostComment.postAuthor}
+                        </p>
+                        {generatedPostComment.postBody ? (
+                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#4f4740]">
+                            {generatedPostComment.postBody}
+                          </p>
+                        ) : null}
+                        <div className="mt-4 rounded-lg border border-white/50 bg-white/70 p-4">
+                          <p className="font-mono text-xs uppercase tracking-normal text-[#155e63]">
+                            Drafted comment
+                          </p>
                           <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#1f3133]">
-                            {replyDrafts[opportunity.id]}
+                            {generatedPostComment.comment}
                           </p>
                         </div>
-                      ) : null}
-                    </article>
-                  );
-                })(),
-              )
-            ) : (
-              <div className="rounded-lg border border-black/10 bg-white p-4 text-sm leading-6 text-[#5b524a]">
-                No {opportunityFilter}-intent {replyStateFilter} opportunities
-                match this project right now. Adjust the project keywords or run
-                discovery again to refresh the inbox.
+                      </div>
+                    ) : null}
+                  </div>
+                </section>
               </div>
-            )}
-          </div>
-        </div>
-      </section>
+              <button
+                type="button"
+                aria-label="Close post reply helper"
+                onClick={() => setActiveWorkspaceTool(null)}
+                className="flex-1"
+              />
+            </div>
+          ) : null}
 
-      {activeWorkspaceTool === "tracking" ? (
-        <div className="panel-overlay-enter fixed inset-0 z-40 flex justify-end bg-black/28 backdrop-blur-[2px]">
-          <div className="panel-right-enter h-full w-full max-w-4xl overflow-y-auto border-l border-black/10 bg-[#fffdf8] p-6 shadow-xl sm:p-8">
-            <section className="app-panel p-4">
+          {activeWorkspaceTool === "reply" ? (
+            <div className="panel-overlay-enter fixed inset-0 z-40 flex justify-end bg-black/28 backdrop-blur-[2px]">
+              <div className="panel-right-enter h-full w-full max-w-2xl overflow-y-auto border-l border-black/10 bg-[#fffdf8] p-6 shadow-xl sm:p-8">
+                <section className="app-panel p-4">
+                  <button
+                    type="button"
+                    aria-label="Close comment reply helper"
+                    onClick={() => setActiveWorkspaceTool(null)}
+                    className="mb-4 rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                  >
+                    Close
+                  </button>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-lg font-semibold text-[#14110f]">
+                        Comment Reply Helper
+                      </h2>
+                      <p className="mt-1 text-sm leading-6 text-[#5b524a]">
+                        Draft from a pasted Reddit comment, or review replies
+                        started from today&apos;s action cards.
+                      </p>
+                    </div>
+                    {currentProject ? (
+                      <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#6b6258]">
+                        For {currentProject.name}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-4 rounded-lg border border-black/10 bg-white p-4">
+                    <form
+                      onSubmit={handleGenerateCommentReply}
+                      className="grid gap-3"
+                    >
+                      <label className="grid gap-2 text-sm font-medium text-[#2f2a26]">
+                        Post URL
+                        <input
+                          value={commentReplyComposer.postUrl}
+                          onChange={(event) =>
+                            setCommentReplyComposer((current) => ({
+                              ...current,
+                              postUrl: event.target.value,
+                            }))
+                          }
+                          className="rounded-lg border border-black/10 bg-white px-3 py-2 outline-none transition focus:border-[#d95d39]"
+                          placeholder="https://www.reddit.com/r/subreddit/comments/..."
+                        />
+                      </label>
+
+                      <label className="grid gap-2 text-sm font-medium text-[#2f2a26]">
+                        Comment URL
+                        <input
+                          value={commentReplyComposer.commentUrl}
+                          onChange={(event) =>
+                            setCommentReplyComposer((current) => ({
+                              ...current,
+                              commentUrl: event.target.value,
+                            }))
+                          }
+                          className="rounded-lg border border-black/10 bg-white px-3 py-2 outline-none transition focus:border-[#d95d39]"
+                          placeholder="https://www.reddit.com/r/subreddit/comments/.../comment_id/"
+                        />
+                      </label>
+
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="submit"
+                          disabled={isGeneratingCommentReply}
+                          className="rounded-md bg-[#d95d39] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#bf4f30] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isGeneratingCommentReply
+                            ? "Drafting..."
+                            : "Draft reply to comment"}
+                        </button>
+                        {generatedCommentReply ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              copyDraftToClipboard(
+                                "generated-comment-reply",
+                                generatedCommentReply.reply,
+                                "Comment reply",
+                              )
+                            }
+                            className="rounded-md border border-black/10 px-4 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                          >
+                            {copiedDraftKey === "generated-comment-reply"
+                              ? "Copied"
+                              : "Copy reply"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </form>
+
+                    {generatedCommentReply ? (
+                      <div className="mt-4 rounded-lg border border-[#155e63]/18 bg-[#edf6f6] p-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-md border border-[#155e63]/20 bg-white/70 px-2 py-1 text-xs text-[#155e63]">
+                            r/{generatedCommentReply.subreddit}
+                          </span>
+                          <span className="rounded-md border border-[#155e63]/20 bg-white/70 px-2 py-1 text-xs text-[#155e63]">
+                            Soft-promo score{" "}
+                            {generatedCommentReply.softPromotionScore}
+                          </span>
+                        </div>
+                        <p className="mt-4 text-sm font-semibold text-[#14110f]">
+                          {generatedCommentReply.postTitle}
+                        </p>
+                        <p className="mt-3 text-sm leading-6 text-[#1f3133]">
+                          Comment from u/{generatedCommentReply.commentAuthor}
+                        </p>
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#4f4740]">
+                          {generatedCommentReply.commentBody}
+                        </p>
+                        <div className="mt-4 rounded-lg border border-white/50 bg-white/70 p-4">
+                          <p className="font-mono text-xs uppercase tracking-normal text-[#155e63]">
+                            Drafted reply
+                          </p>
+                          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#1f3133]">
+                            {generatedCommentReply.reply}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </section>
+              </div>
+              <button
+                type="button"
+                aria-label="Close comment reply helper"
+                onClick={() => setActiveWorkspaceTool(null)}
+                className="flex-1"
+              />
+            </div>
+          ) : null}
+
+          {activePostDraft ? (
+            <div className="panel-overlay-enter fixed inset-0 z-40 flex justify-start bg-black/28 backdrop-blur-[2px]">
+              <div className="panel-left-enter h-full w-full max-w-xl overflow-y-auto border-r border-black/10 bg-[#fffdf8] p-6 shadow-xl sm:p-8">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-mono text-xs uppercase tracking-normal text-[#8b8278]">
+                      Post draft
+                    </p>
+                    <h2 className="mt-1 text-xl font-semibold text-[#14110f]">
+                      r/{activePostDraft.subreddit}
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closePostDraftPanel}
+                    className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#5b524a]">
+                    {activePostDraft.review.verdict}
+                  </span>
+                  {activePostDraft.updatedAt ? (
+                    <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#5b524a]">
+                      Updated {formatDateTime(activePostDraft.updatedAt)}
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="mt-4 space-y-4 rounded-lg border border-black/10 bg-white p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="font-mono text-xs uppercase tracking-normal text-[#8b8278]">
+                      Draft content
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          copyDraftToClipboard(
+                            `post:${activePostDraft.actionKey}`,
+                            `${activePostDraft.title}\n\n${activePostDraft.body}`,
+                            "Post draft",
+                          )
+                        }
+                        className="rounded-md border border-black/10 px-2 py-1 text-xs font-semibold text-[#14110f] transition hover:bg-black/5"
+                      >
+                        {copiedDraftKey === `post:${activePostDraft.actionKey}`
+                          ? "Copied"
+                          : "Copy draft"}
+                      </button>
+                      <a
+                        href={buildSubredditSubmitPath(
+                          activePostDraft.subreddit,
+                        )}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-md border border-black/10 px-2 py-1 text-xs font-semibold text-[#14110f] transition hover:bg-black/5"
+                      >
+                        Open submit
+                      </a>
+                    </div>
+                  </div>
+                  <p className="text-lg font-semibold text-[#14110f]">
+                    {activePostDraft.title}
+                  </p>
+                  <p className="whitespace-pre-wrap text-sm leading-6 text-[#4f4740]">
+                    {activePostDraft.body}
+                  </p>
+                </div>
+
+                <div className="mt-4 rounded-lg border border-black/10 bg-white p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="font-mono text-xs uppercase tracking-normal text-[#8b8278]">
+                      Rules review
+                    </p>
+                    <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#5b524a]">
+                      {activePostDraft.review.verdict}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-[#4f4740]">
+                    {activePostDraft.review.summary}
+                  </p>
+                  {activePostDraft.review.issues.length ? (
+                    <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-[#4f4740]">
+                      {activePostDraft.review.issues.map((issue) => (
+                        <li key={issue}>{issue}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {activePostDraft.rules.length ? (
+                    <div className="mt-4">
+                      <p className="font-mono text-xs uppercase tracking-normal text-[#8b8278]">
+                        Fetched subreddit rules
+                      </p>
+                      <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-[#4f4740]">
+                        {activePostDraft.rules.map((rule) => (
+                          <li key={rule}>{rule}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-sm leading-6 text-[#5b524a]">
+                      Could not fetch subreddit rules automatically. Verify the
+                      rules manually before posting.
+                    </p>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-label="Close post draft panel"
+                onClick={closePostDraftPanel}
+                className="flex-1"
+              />
+            </div>
+          ) : null}
+
+          <section className="grid gap-4 lg:grid-cols-[minmax(0,0.62fr)_minmax(0,1.38fr)]">
+            <div className="app-panel min-w-0 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-[#14110f]">
+                    Subreddit radar
+                  </h2>
+                </div>
+              </div>
+
+              <div className="mt-4 max-h-[32rem] space-y-2 overflow-y-auto pr-1">
+                {hasSubreddits ? (
+                  dashboard.subreddits.map((subreddit) => (
+                    <div
+                      key={subreddit.name}
+                      className="min-w-0 rounded-lg border border-black/10 bg-white p-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="break-words text-sm font-semibold text-[#14110f]">
+                            r/{subreddit.name}
+                          </h3>
+                          <p className="mt-1 text-xs text-[#6b6258]">
+                            {subreddit.promoTag}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right text-xs text-[#5b524a]">
+                          <div>{subreddit.mentions} threads</div>
+                          <div>{subreddit.engagementScore} engagement</div>
+                        </div>
+                      </div>
+                      <div className="mt-3 h-1.5 rounded-full bg-black/6">
+                        <div
+                          className="h-1.5 rounded-full bg-[#155e63]"
+                          style={{
+                            width: `${Math.max(8, subreddit.averageIntent)}%`,
+                          }}
+                        />
+                      </div>
+                      <p className="mt-2 text-xs text-[#5b524a]">
+                        Average intent score: {subreddit.averageIntent}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-lg border border-black/10 bg-white p-4 text-sm leading-6 text-[#5b524a]">
+                    Subreddit matches will appear here after you run a keyword
+                    discovery search.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="app-panel min-w-0 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-[#14110f]">
+                    Opportunity inbox
+                  </h2>
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium text-[#5b524a]">
+                  Filter:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setOpportunityFilter("high")}
+                  className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${
+                    opportunityFilter === "high"
+                      ? "bg-[#14110f] text-white"
+                      : "border border-black/10 text-[#14110f] hover:bg-black/5"
+                  }`}
+                >
+                  High ({opportunityCounts.high})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOpportunityFilter("low")}
+                  className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${
+                    opportunityFilter === "low"
+                      ? "bg-[#14110f] text-white"
+                      : "border border-black/10 text-[#14110f] hover:bg-black/5"
+                  }`}
+                >
+                  Low ({opportunityCounts.low})
+                </button>
+                <span className="ml-2 text-sm font-medium text-[#5b524a]">
+                  Reply:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setReplyStateFilter("not-replied")}
+                  className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${
+                    replyStateFilter === "not-replied"
+                      ? "bg-[#14110f] text-white"
+                      : "border border-black/10 text-[#14110f] hover:bg-black/5"
+                  }`}
+                >
+                  Not replied ({opportunityCounts.notReplied})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReplyStateFilter("replied")}
+                  className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${
+                    replyStateFilter === "replied"
+                      ? "bg-[#14110f] text-white"
+                      : "border border-black/10 text-[#14110f] hover:bg-black/5"
+                  }`}
+                >
+                  Replied ({opportunityCounts.replied})
+                </button>
+              </div>
+
+              <div className="mt-4 max-h-[32rem] space-y-3 overflow-y-auto pr-1">
+                {hasOpportunities ? (
+                  visibleOpportunities.map((opportunity) =>
+                    (() => {
+                      const isSaved = isSavedStatus(opportunity.status);
+
+                      return (
+                        <article
+                          key={opportunity.id}
+                          className="min-w-0 overflow-hidden rounded-lg border border-black/10 bg-white p-4"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex min-w-0 flex-wrap items-center gap-2">
+                              <span className="max-w-full break-words rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1 text-xs text-[#6f675f]">
+                                {opportunity.keyword}
+                              </span>
+                              <span className="rounded-md border border-black/10 px-2 py-1 text-xs text-[#5b524a]">
+                                r/{opportunity.subreddit}
+                              </span>
+                              <span className="rounded-md border border-black/10 px-2 py-1 text-xs text-[#5b524a]">
+                                {opportunity.status}
+                              </span>
+                            </div>
+
+                            <div className="shrink-0 flex items-center gap-2 text-xs text-[#5b524a]">
+                              <span>Intent {opportunity.intentScore}</span>
+                              <span>Risk {opportunity.riskScore}</span>
+                              <span>{opportunity.commentsCount} comments</span>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
+                            <h3 className="min-w-0 flex-1 break-words text-base font-semibold text-[#14110f]">
+                              <a
+                                href={opportunity.permalink}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="block break-words hover:text-[#155e63]"
+                              >
+                                {opportunity.title}
+                              </a>
+                            </h3>
+                            <a
+                              href={opportunity.permalink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-md border border-black/10 bg-white px-2 py-1 text-xs font-semibold text-[#155e63] transition hover:border-[#155e63]/30 hover:bg-[#155e63]/5"
+                            >
+                              Open on Reddit
+                            </a>
+                          </div>
+                          <p className="mt-3 line-clamp-3 break-words text-sm leading-6 text-[#4f4740]">
+                            {opportunity.excerpt ||
+                              "No post body was returned for this thread."}
+                          </p>
+
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => generateReply(opportunity)}
+                              disabled={busyOpportunityId === opportunity.id}
+                              className="rounded-md bg-[#d95d39] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#bf4f30] disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {busyOpportunityId === opportunity.id
+                                ? "Drafting..."
+                                : "Draft reply"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateWorkflow(
+                                  opportunity.id,
+                                  isSaved ? "NEW" : "SAVED",
+                                )
+                              }
+                              className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                            >
+                              {isSaved ? "Unsave" : "Save"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateWorkflow(opportunity.id, "REPLIED")
+                              }
+                              className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                            >
+                              Mark replied
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateWorkflow(opportunity.id, "DISMISSED")
+                              }
+                              className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+
+                          {replyDrafts[opportunity.id] ? (
+                            <div className="mt-4 rounded-lg border border-[#155e63]/20 bg-[#edf6f6] p-4">
+                              <div className="flex items-center justify-between gap-4">
+                                <div>
+                                  <p className="font-mono text-xs uppercase tracking-normal text-[#155e63]">
+                                    Reply draft
+                                  </p>
+                                  <p className="mt-1 text-xs text-[#155e63]">
+                                    Soft-promo score:{" "}
+                                    {replyScores[opportunity.id] ?? 0}
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    copyDraftToClipboard(
+                                      `reply:${opportunity.id}`,
+                                      replyDrafts[opportunity.id],
+                                      "Reply draft",
+                                    )
+                                  }
+                                  className="rounded-md border border-[#155e63]/20 px-2 py-1 text-xs font-semibold text-[#155e63] transition hover:bg-[#155e63]/10"
+                                >
+                                  {copiedDraftKey === `reply:${opportunity.id}`
+                                    ? "Copied"
+                                    : "Copy draft"}
+                                </button>
+                              </div>
+                              <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#1f3133]">
+                                {replyDrafts[opportunity.id]}
+                              </p>
+                            </div>
+                          ) : null}
+                        </article>
+                      );
+                    })(),
+                  )
+                ) : (
+                  <div className="rounded-lg border border-black/10 bg-white p-4 text-sm leading-6 text-[#5b524a]">
+                    No {opportunityFilter}-intent {replyStateFilter}{" "}
+                    opportunities match this project right now. Adjust the
+                    project keywords or run discovery again to refresh the
+                    inbox.
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {activeWorkspaceTool === "tracking" ? (
+            <div className="panel-overlay-enter fixed inset-0 z-40 flex justify-end bg-black/28 backdrop-blur-[2px]">
+              <div className="panel-right-enter h-full w-full max-w-4xl overflow-y-auto border-l border-black/10 bg-[#fffdf8] p-6 shadow-xl sm:p-8">
+                <section className="app-panel p-4">
+                  <button
+                    type="button"
+                    aria-label="Close tracked posts"
+                    onClick={() => setActiveWorkspaceTool(null)}
+                    className="mb-4 rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
+                  >
+                    Close
+                  </button>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-lg font-semibold text-[#14110f]">
+                        Tracked Reddit posts
+                      </h2>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-xs text-[#6b6258]">
+                      <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1">
+                        {trackedPostTotals.count} tracked posts
+                      </span>
+                      <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1">
+                        {trackedPostTotals.totalScore} total score
+                      </span>
+                      <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1">
+                        {trackedPostTotals.totalComments} total comments
+                      </span>
+                    </div>
+                  </div>
+
+                  <form
+                    onSubmit={handleTrackPost}
+                    className="mt-4 flex flex-col gap-2 lg:flex-row"
+                  >
+                    <input
+                      value={trackedPostUrl}
+                      onChange={(event) =>
+                        setTrackedPostUrl(event.target.value)
+                      }
+                      disabled={!currentProject || isTrackingPost}
+                      className="flex-1 rounded-lg border border-black/10 bg-white px-3 py-2 outline-none transition focus:border-[#d95d39] disabled:cursor-not-allowed disabled:bg-black/[0.03]"
+                      placeholder="https://www.reddit.com/r/subreddit/comments/..."
+                    />
+                    <button
+                      type="submit"
+                      disabled={!currentProject || isTrackingPost}
+                      className="rounded-md bg-[#d95d39] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#bf4f30] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isTrackingPost ? "Tracking..." : "Track post"}
+                    </button>
+                  </form>
+
+                  <p className="mt-3 text-sm leading-6 text-[#5b524a]">
+                    {currentProject
+                      ? "Use this for posts you have already published on Reddit. You can refresh any card later to pull the latest numbers."
+                      : "Select or create a project before tracking post metrics."}
+                  </p>
+
+                  <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+                    {hasTrackedPosts ? (
+                      dashboard.trackedPosts.map((post) => (
+                        <article
+                          key={post.redditId}
+                          className="rounded-lg border border-black/10 bg-white p-4"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-xs font-medium uppercase tracking-normal text-[#8b8278]">
+                                r/{post.subreddit}
+                              </p>
+                              <h3 className="mt-1 line-clamp-2 text-base font-semibold text-[#14110f]">
+                                {post.title}
+                              </h3>
+                            </div>
+                            <a
+                              href={post.permalink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="shrink-0 rounded-md border border-black/10 bg-white px-2 py-1 text-xs font-semibold text-[#155e63] transition hover:border-[#155e63]/30 hover:bg-[#155e63]/5"
+                            >
+                              Open on Reddit
+                            </a>
+                          </div>
+
+                          <p className="mt-3 text-sm leading-6 text-[#5b524a]">
+                            Posted {formatDateTime(post.postedAt)} by u/
+                            {post.author}
+                          </p>
+
+                          <div className="mt-4 grid grid-cols-2 gap-2">
+                            <div className="rounded-lg border border-black/10 bg-[#f3f0e8] p-3">
+                              <p className="text-xs text-[#8b8278]">Score</p>
+                              <p className="mt-1 text-xl font-semibold text-[#14110f]">
+                                {post.score}
+                              </p>
+                            </div>
+                            <div className="rounded-lg border border-black/10 bg-[#f3f0e8] p-3">
+                              <p className="text-xs text-[#8b8278]">Comments</p>
+                              <p className="mt-1 text-xl font-semibold text-[#14110f]">
+                                {post.commentsCount}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 flex items-center justify-between gap-3 text-sm text-[#5b524a]">
+                            <span>
+                              Last sync {formatDateTime(post.lastSyncedAt)}
+                            </span>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => refreshTrackedPost(post)}
+                                disabled={
+                                  busyTrackedPostId === post.redditId ||
+                                  deletingTrackedPostId === post.id
+                                }
+                                className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {busyTrackedPostId === post.redditId
+                                  ? "Refreshing..."
+                                  : "Refresh"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTrackedPost(post)}
+                                disabled={deletingTrackedPostId === post.id}
+                                className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {deletingTrackedPostId === post.id
+                                  ? "Deleting..."
+                                  : "Delete"}
+                              </button>
+                            </div>
+                          </div>
+                        </article>
+                      ))
+                    ) : (
+                      <div className="rounded-lg border border-black/10 bg-white p-4 text-sm leading-6 text-[#5b524a] lg:col-span-2 xl:col-span-3">
+                        No tracked posts yet. Paste a Reddit post URL above to
+                        start tracking score and comment growth for content you
+                        have already published.
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </div>
               <button
                 type="button"
                 aria-label="Close tracked posts"
                 onClick={() => setActiveWorkspaceTool(null)}
-                className="mb-4 rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5"
-              >
-                Close
-              </button>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-[#14110f]">
-              Tracked Reddit posts
-            </h2>
-          </div>
-          <div className="flex flex-wrap gap-2 text-xs text-[#6b6258]">
-            <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1">
-              {trackedPostTotals.count} tracked posts
-            </span>
-            <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1">
-              {trackedPostTotals.totalScore} total score
-            </span>
-            <span className="rounded-md border border-black/10 bg-[#f3f0e8] px-2 py-1">
-              {trackedPostTotals.totalComments} total comments
-            </span>
-          </div>
-        </div>
-
-        <form
-          onSubmit={handleTrackPost}
-          className="mt-4 flex flex-col gap-2 lg:flex-row"
-        >
-          <input
-            value={trackedPostUrl}
-            onChange={(event) => setTrackedPostUrl(event.target.value)}
-            disabled={!currentProject || isTrackingPost}
-            className="flex-1 rounded-lg border border-black/10 bg-white px-3 py-2 outline-none transition focus:border-[#d95d39] disabled:cursor-not-allowed disabled:bg-black/[0.03]"
-            placeholder="https://www.reddit.com/r/subreddit/comments/..."
-          />
-          <button
-            type="submit"
-            disabled={!currentProject || isTrackingPost}
-            className="rounded-md bg-[#d95d39] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#bf4f30] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isTrackingPost ? "Tracking..." : "Track post"}
-          </button>
-        </form>
-
-        <p className="mt-3 text-sm leading-6 text-[#5b524a]">
-          {currentProject
-            ? "Use this for posts you have already published on Reddit. You can refresh any card later to pull the latest numbers."
-            : "Select or create a project before tracking post metrics."}
-        </p>
-
-        <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
-          {hasTrackedPosts ? (
-            dashboard.trackedPosts.map((post) => (
-              <article
-                key={post.redditId}
-                className="rounded-lg border border-black/10 bg-white p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-normal text-[#8b8278]">
-                      r/{post.subreddit}
-                    </p>
-                    <h3 className="mt-1 line-clamp-2 text-base font-semibold text-[#14110f]">
-                      {post.title}
-                    </h3>
-                  </div>
-                  <a
-                    href={post.permalink}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="shrink-0 rounded-md border border-black/10 bg-white px-2 py-1 text-xs font-semibold text-[#155e63] transition hover:border-[#155e63]/30 hover:bg-[#155e63]/5"
-                  >
-                    Open on Reddit
-                  </a>
-                </div>
-
-                <p className="mt-3 text-sm leading-6 text-[#5b524a]">
-                  Posted {formatDateTime(post.postedAt)} by u/{post.author}
-                </p>
-
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                  <div className="rounded-lg border border-black/10 bg-[#f3f0e8] p-3">
-                    <p className="text-xs text-[#8b8278]">
-                      Score
-                    </p>
-                    <p className="mt-1 text-xl font-semibold text-[#14110f]">
-                      {post.score}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-black/10 bg-[#f3f0e8] p-3">
-                    <p className="text-xs text-[#8b8278]">
-                      Comments
-                    </p>
-                    <p className="mt-1 text-xl font-semibold text-[#14110f]">
-                      {post.commentsCount}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex items-center justify-between gap-3 text-sm text-[#5b524a]">
-                  <span>Last sync {formatDateTime(post.lastSyncedAt)}</span>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => refreshTrackedPost(post)}
-                      disabled={
-                        busyTrackedPostId === post.redditId ||
-                        deletingTrackedPostId === post.id
-                      }
-                      className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {busyTrackedPostId === post.redditId
-                        ? "Refreshing..."
-                        : "Refresh"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteTrackedPost(post)}
-                      disabled={deletingTrackedPostId === post.id}
-                      className="rounded-md border border-black/10 px-3 py-2 text-sm font-semibold text-[#14110f] transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {deletingTrackedPostId === post.id
-                        ? "Deleting..."
-                        : "Delete"}
-                    </button>
-                  </div>
-                </div>
-              </article>
-            ))
-          ) : (
-            <div className="rounded-lg border border-black/10 bg-white p-4 text-sm leading-6 text-[#5b524a] lg:col-span-2 xl:col-span-3">
-              No tracked posts yet. Paste a Reddit post URL above to start
-              tracking score and comment growth for content you have already
-              published.
+                className="flex-1"
+              />
             </div>
-          )}
-        </div>
-            </section>
-          </div>
-          <button
-            type="button"
-            aria-label="Close tracked posts"
-            onClick={() => setActiveWorkspaceTool(null)}
-            className="flex-1"
-          />
-        </div>
-      ) : null}
-
+          ) : null}
         </div>
       </div>
 

@@ -519,6 +519,7 @@ async function persistProjectDiscoveryRecords(
       userId: input.userId,
     },
     data: {
+      discoveryMode: input.payload.discoveryMode,
       lastDiscoveryAt: discoveryCompletedAt,
     },
   });
@@ -623,6 +624,7 @@ export async function deleteProject(projectId: string, clerkId: string) {
 export async function refreshProjectDiscovery(
   projectId: string,
   userId: string,
+  discoveryModeOverride?: DiscoveryMode,
 ) {
   if (!prisma) {
     return null;
@@ -663,7 +665,7 @@ export async function refreshProjectDiscovery(
     websiteUrl: project.websiteUrl || "",
     productName: project.name,
     productDescription: project.description || "",
-    discoveryMode: project.discoveryMode,
+    discoveryMode: discoveryModeOverride || project.discoveryMode,
     excludedSubreddits: user?.excludedSubreddits || [],
     keywords: project.trackedKeywords.map((keyword) => keyword.term),
   };
@@ -685,6 +687,7 @@ export async function refreshProjectDiscovery(
 export async function refreshAllProjectDiscoveries(
   userId: string,
   selectedProjectId?: string | null,
+  discoveryModeOverride?: DiscoveryMode,
 ) {
   if (!prisma) {
     return null;
@@ -701,7 +704,7 @@ export async function refreshAllProjectDiscoveries(
   }
 
   for (const project of projects) {
-    await refreshProjectDiscovery(project.id, userId);
+    await refreshProjectDiscovery(project.id, userId, discoveryModeOverride);
   }
 
   return getDashboardStateForUser(userId, selectedProjectId);
