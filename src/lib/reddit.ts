@@ -823,6 +823,7 @@ export async function discoverOpportunities(input: {
   productName: string;
   productDescription: string;
   excludedSubreddits: string[];
+  enableAiReranking?: boolean;
 }) {
   const excludedSubreddits = new Set(
     input.excludedSubreddits.map(normalizeSubredditName).filter(Boolean),
@@ -947,11 +948,13 @@ export async function discoverOpportunities(input: {
     );
   });
 
-  const reranked = await rerankOpportunityMatches({
-    productName: input.productName,
-    productDescription: input.productDescription,
-    opportunities,
-  });
+  const reranked = input.enableAiReranking !== false
+    ? await rerankOpportunityMatches({
+        productName: input.productName,
+        productDescription: input.productDescription,
+        opportunities,
+      })
+    : null;
 
   if (reranked?.size) {
     opportunities = opportunities

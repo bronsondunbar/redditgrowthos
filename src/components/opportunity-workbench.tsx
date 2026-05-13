@@ -9,6 +9,7 @@ import { parseSubredditList } from "@/lib/subreddits";
 import type {
   ActionCard,
   DashboardState,
+  DiscoveryMode,
   OpportunityCard,
   PostDraftCard,
   TrackedPostCard,
@@ -47,6 +48,7 @@ type ProjectFormState = {
   websiteUrl: string;
   productName: string;
   productDescription: string;
+  discoveryMode: DiscoveryMode;
   keywords: string;
 };
 
@@ -123,6 +125,7 @@ function buildFormState(state: DashboardState): ProjectFormState {
     websiteUrl: state.websiteUrl,
     productName: state.productName,
     productDescription: state.productDescription,
+    discoveryMode: state.discoveryMode,
     keywords: state.trackedKeywords.join(", "),
   };
 }
@@ -178,12 +181,23 @@ function upsertPostDraftList(
     .slice(0, 12);
 }
 
-function buildEmptyProjectForm(): ProjectFormState {
+function getPreferredDiscoveryMode(hasOpenAi: boolean): DiscoveryMode {
+  return hasOpenAi ? "AI_ASSISTED" : "REDDIT_API";
+}
+
+function formatDiscoveryMode(mode: DiscoveryMode) {
+  return mode === "AI_ASSISTED" ? "AI-assisted" : "Reddit APIs only";
+}
+
+function buildEmptyProjectForm(
+  discoveryMode: DiscoveryMode = "AI_ASSISTED",
+): ProjectFormState {
   return {
     projectId: null,
     websiteUrl: "",
     productName: "",
     productDescription: "",
+    discoveryMode,
     keywords: "",
   };
 }
@@ -427,7 +441,11 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
   function openNewProjectComposer() {
     setError(null);
     setNotice(null);
-    setForm(buildEmptyProjectForm());
+    setForm(
+      buildEmptyProjectForm(
+        getPreferredDiscoveryMode(dashboard.configured.openAi),
+      ),
+    );
     setComposerMode("create");
   }
 
@@ -1191,6 +1209,7 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
         websiteUrl: "",
         productName: "",
         productDescription: "",
+        discoveryMode: getPreferredDiscoveryMode(current.configured.openAi),
         trackedKeywords: [],
         trackedPosts: [],
         postDrafts: [],
@@ -1205,7 +1224,11 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
         subreddits: [],
         opportunities: [],
       }));
-      setForm(buildEmptyProjectForm());
+      setForm(
+        buildEmptyProjectForm(
+          getPreferredDiscoveryMode(dashboard.configured.openAi),
+        ),
+      );
       setReplyDrafts({});
       setReplyScores({});
       setPostDrafts({});
@@ -1513,9 +1536,13 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                     "Create a project to start tracking separate products or client workspaces inside the same account."}
                 </p>
                 {currentProject ? (
-                  <p className="mt-3 text-xs text-[#6b6258]">
-                    {formatLastDiscoveryAt(currentProject.lastDiscoveryAt)}
-                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-[#6b6258]">
+                    <span>{formatLastDiscoveryAt(currentProject.lastDiscoveryAt)}</span>
+                    <span>·</span>
+                    <span>
+                      Mode: {formatDiscoveryMode(currentProject.discoveryMode)}
+                    </span>
+                  </div>
                 ) : null}
               </div>
               {currentProject ? (
@@ -2881,6 +2908,72 @@ export function OpportunityWorkbench({ initialState }: WorkbenchProps) {
                   placeholder="reddit marketing tool, reddit lead generation, customer pain points"
                 />
               </label>
+
+              <div className="grid gap-2">
+                <p className="text-sm font-medium text-[#2f2a26]">
+                  Discovery engine
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-2 rounded-xl border border-black/10 bg-white p-4">
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="radio"
+                        name="discoveryMode"
+                        checked={form.discoveryMode === "AI_ASSISTED"}
+                        disabled={!dashboard.configured.openAi}
+                        onChange={() =>
+                          setForm((current) => ({
+                            ...current,
+                            discoveryMode: "AI_ASSISTED",
+                          }))
+                        }
+                        className="mt-1"
+                      />
+                      <div>
+                        <p className="text-sm font-semibold text-[#14110f]">
+                          AI-assisted
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-[#5b524a]">
+                          Search Reddit first, then use AI to rerank the best
+                          matches for buyer intent and product fit.
+                        </p>
+                      </div>
+                    </div>
+                  </label>
+
+                  <label className="grid gap-2 rounded-xl border border-black/10 bg-white p-4">
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="radio"
+                        name="discoveryMode"
+                        checked={form.discoveryMode === "REDDIT_API"}
+                        onChange={() =>
+                          setForm((current) => ({
+                            ...current,
+                            discoveryMode: "REDDIT_API",
+                          }))
+                        }
+                        className="mt-1"
+                      />
+                      <div>
+                        <p className="text-sm font-semibold text-[#14110f]">
+                          Reddit APIs only
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-[#5b524a]">
+                          Use Reddit public search by default and switch to
+                          OAuth automatically when Reddit API credentials are
+                          configured.
+                        </p>
+                      </div>
+                    </div>
+                  </label>
+                </div>
+                <p className="text-sm leading-6 text-[#5b524a]">
+                  {!dashboard.configured.openAi
+                    ? "AI-assisted discovery is unavailable until OPENAI_API_KEY is configured."
+                    : "Pick whether discovery should include AI reranking or stay on Reddit APIs only."}
+                </p>
+              </div>
 
               <div className="flex flex-wrap gap-3 pt-2">
                 <button

@@ -1,0 +1,4 @@
+CREATE TYPE "DiscoveryMode" AS ENUM ('AI_ASSISTED', 'REDDIT_API');
+
+ALTER TABLE "Project"
+ADD COLUMN "discoveryMode" "DiscoveryMode" NOT NULL DEFAULT 'AI_ASSISTED';

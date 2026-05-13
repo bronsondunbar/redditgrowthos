@@ -17,6 +17,7 @@ import {
 import type {
   ActionCard,
   DashboardState,
+  DiscoveryMode,
   DiscoveryPayload,
   OpportunityCard,
   PostDraftCard,
@@ -48,6 +49,7 @@ function createDashboardState(input: {
   websiteUrl: string;
   productName: string;
   productDescription: string;
+  discoveryMode: DiscoveryMode;
   excludedSubreddits: string[];
   trackedKeywords: string[];
   trackedPosts: TrackedPostCard[];
@@ -78,6 +80,7 @@ function createDashboardState(input: {
     websiteUrl: input.websiteUrl,
     productName: input.productName,
     productDescription: input.productDescription,
+    discoveryMode: input.discoveryMode,
     excludedSubreddits: input.excludedSubreddits,
     trackedKeywords: input.trackedKeywords,
     trackedPosts: input.trackedPosts,
@@ -91,7 +94,10 @@ function createDashboardState(input: {
 
 function buildEmptyState(
   input?: Partial<
-    Pick<DashboardState, "requiresAuth" | "demoMode" | "excludedSubreddits">
+    Pick<
+      DashboardState,
+      "requiresAuth" | "demoMode" | "excludedSubreddits" | "discoveryMode"
+    >
   >,
 ) {
   return createDashboardState({
@@ -101,6 +107,9 @@ function buildEmptyState(
     productName: "RedditGrowthOS",
     productDescription:
       "A Reddit growth workspace for founders that combines opportunity discovery, reply drafting, and a daily action plan.",
+    discoveryMode:
+      input?.discoveryMode ||
+      (isOpenAiConfigured ? "AI_ASSISTED" : "REDDIT_API"),
     excludedSubreddits: input?.excludedSubreddits ?? [],
     trackedKeywords: [],
     trackedPosts: [],
@@ -109,6 +118,13 @@ function buildEmptyState(
     demoMode: input?.demoMode ?? false,
     requiresAuth: input?.requiresAuth ?? false,
   });
+}
+
+export class DiscoveryConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DiscoveryConfigurationError";
+  }
 }
 
 export async function ensureUser(clerkId: string) {
@@ -128,6 +144,7 @@ function toProjectSummary(project: {
   name: string;
   description: string | null;
   websiteUrl: string | null;
+  discoveryMode: DiscoveryMode;
   lastDiscoveryAt: Date | null;
   updatedAt: Date;
   _count: {
@@ -144,6 +161,7 @@ function toProjectSummary(project: {
     name: project.name,
     description: project.description || "",
     websiteUrl: project.websiteUrl || "",
+    discoveryMode: project.discoveryMode,
     lastDiscoveryAt: lastDiscoveryAt?.toISOString() || null,
     keywordCount: project._count.trackedKeywords,
     opportunityCount: project._count.opportunities,
@@ -318,6 +336,7 @@ async function getDashboardStateForUser(
     websiteUrl: currentProject.websiteUrl || "",
     productName: currentProject.name,
     productDescription: currentProject.description || "",
+    discoveryMode: currentProject.discoveryMode,
     excludedSubreddits: user?.excludedSubreddits || [],
     trackedKeywords: keywords.map((keyword) => keyword.term),
     trackedPosts: trackedPosts.map(toTrackedPostCard),
@@ -359,6 +378,7 @@ export function buildTransientDashboardState(
         name: payload.productName,
         description: payload.productDescription,
         websiteUrl: payload.websiteUrl || "",
+        discoveryMode: payload.discoveryMode,
         lastDiscoveryAt: new Date().toISOString(),
         keywordCount: payload.keywords.length,
         opportunityCount: opportunities.length,
@@ -369,6 +389,7 @@ export function buildTransientDashboardState(
     websiteUrl: payload.websiteUrl || "",
     productName: payload.productName,
     productDescription: payload.productDescription,
+    discoveryMode: payload.discoveryMode,
     excludedSubreddits: payload.excludedSubreddits,
     trackedKeywords: payload.keywords,
     trackedPosts: [],
@@ -380,11 +401,18 @@ export function buildTransientDashboardState(
 }
 
 export async function runDiscovery(payload: DiscoveryPayload) {
+  if (payload.discoveryMode === "AI_ASSISTED" && !isOpenAiConfigured) {
+    throw new DiscoveryConfigurationError(
+      "AI-assisted discovery requires OPENAI_API_KEY. Switch to Reddit APIs only or configure OpenAI first.",
+    );
+  }
+
   const opportunities = await discoverOpportunities({
     keywords: payload.keywords,
     productName: payload.productName,
     productDescription: payload.productDescription,
     excludedSubreddits: payload.excludedSubreddits,
+    enableAiReranking: payload.discoveryMode === "AI_ASSISTED",
   });
   return buildTransientDashboardState(payload, opportunities);
 }
@@ -392,10 +420,10 @@ export async function runDiscovery(payload: DiscoveryPayload) {
 async function persistProjectDiscoveryRecords(
   db: Prisma.TransactionClient,
   input: {
-  userId: string;
-  projectId: string;
-  payload: DiscoveryPayload;
-  dashboard: DashboardState;
+    userId: string;
+    projectId: string;
+    payload: DiscoveryPayload;
+    dashboard: DashboardState;
   },
 ) {
   const discoveryCompletedAt = new Date();
@@ -539,6 +567,7 @@ export async function persistDiscovery(
             name: payload.productName,
             description: payload.productDescription,
             websiteUrl: payload.websiteUrl || null,
+            discoveryMode: payload.discoveryMode,
           },
         })
       : await tx.project.create({
@@ -547,6 +576,7 @@ export async function persistDiscovery(
             name: payload.productName,
             description: payload.productDescription,
             websiteUrl: payload.websiteUrl || null,
+            discoveryMode: payload.discoveryMode,
           },
         });
 
@@ -608,6 +638,7 @@ export async function refreshProjectDiscovery(
       name: true,
       description: true,
       websiteUrl: true,
+      discoveryMode: true,
       trackedKeywords: {
         orderBy: { createdAt: "asc" },
         select: {
@@ -632,6 +663,7 @@ export async function refreshProjectDiscovery(
     websiteUrl: project.websiteUrl || "",
     productName: project.name,
     productDescription: project.description || "",
+    discoveryMode: project.discoveryMode,
     excludedSubreddits: user?.excludedSubreddits || [],
     keywords: project.trackedKeywords.map((keyword) => keyword.term),
   };

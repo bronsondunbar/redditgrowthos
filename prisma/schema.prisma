@@ -15,6 +15,11 @@ enum OpportunityStatus {
   DISMISSED
 }
 
+enum DiscoveryMode {
+  AI_ASSISTED
+  REDDIT_API
+}
+
 model User {
   id                 String          @id @default(cuid())
   clerkId            String          @unique
@@ -37,6 +42,7 @@ model Project {
   name           String
   description    String?
   websiteUrl     String?
+  discoveryMode  DiscoveryMode    @default(AI_ASSISTED)
   lastDiscoveryAt DateTime?
   user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   trackedKeywords TrackedKeyword[]

@@ -1,4 +1,5 @@
 export type WorkflowStatus = "NEW" | "SAVED" | "REPLIED" | "DISMISSED";
+export type DiscoveryMode = "AI_ASSISTED" | "REDDIT_API";
 
 export type OpportunityCard = {
   id: string;
@@ -45,6 +46,7 @@ export type ProjectSummary = {
   name: string;
   description: string;
   websiteUrl: string;
+  discoveryMode: DiscoveryMode;
   lastDiscoveryAt: string | null;
   keywordCount: number;
   opportunityCount: number;
@@ -92,6 +94,7 @@ export type DashboardState = {
   websiteUrl: string;
   productName: string;
   productDescription: string;
+  discoveryMode: DiscoveryMode;
   excludedSubreddits: string[];
   trackedKeywords: string[];
   analytics: {
@@ -113,6 +116,7 @@ export type DiscoveryPayload = {
   websiteUrl?: string;
   productName: string;
   productDescription: string;
+  discoveryMode: DiscoveryMode;
   excludedSubreddits: string[];
   keywords: string[];
 };

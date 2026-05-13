@@ -6,6 +6,7 @@ import { isClerkConfigured, isDatabaseConfigured } from "@/lib/config";
 import { RedditDiscoveryError } from "@/lib/reddit";
 import { isValidSubredditName, parseSubredditList } from "@/lib/subreddits";
 import {
+  DiscoveryConfigurationError,
   ensureUser,
   persistDiscovery,
   refreshAllProjectDiscoveries,
@@ -39,6 +40,7 @@ const discoverySchema = z.object({
   websiteUrl: z.string().trim().max(2048).optional().default(""),
   productName: z.string().trim().min(2).max(80),
   productDescription: z.string().trim().min(12).max(500),
+  discoveryMode: z.enum(["AI_ASSISTED", "REDDIT_API"]).default("AI_ASSISTED"),
   excludedSubreddits: z
     .string()
     .trim()
@@ -117,6 +119,10 @@ export async function POST(request: Request) {
         },
         { status: 502 },
       );
+    }
+
+    if (error instanceof DiscoveryConfigurationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
     console.error("Opportunity discovery failed", error);
@@ -203,6 +209,10 @@ export async function PATCH(request: Request) {
         },
         { status: 502 },
       );
+    }
+
+    if (error instanceof DiscoveryConfigurationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
     console.error("Opportunity refresh failed", error);

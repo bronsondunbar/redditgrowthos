@@ -12,7 +12,7 @@ I started building this to help market and generate leads for [ReplyRadar](https
 
 - Creates a multi-project Reddit workspace for products, offers, and campaigns.
 - Turns a site URL into an AI-assisted product summary and discovery keyword set.
-- Discovers Reddit threads, scores them for relevance and risk, and keeps an action-oriented inbox.
+- Discovers Reddit threads with either AI-assisted reranking or Reddit APIs only, then keeps an action-oriented inbox.
 - Tracks published Reddit posts and stores refreshable performance metrics.
 - Builds a daily plan with one post plus two reply opportunities and can email that plan on a schedule.
 
